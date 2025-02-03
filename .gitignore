@@ -1,0 +1,143 @@
+# Documentation
+/docs
+
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+.yarn/
+.yarnrc.yml
+
+# Testing
+/coverage
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# Next.js
+.next/
+out/
+build/
+dist/
+.swc/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Local files
+*.local
+.DS_Store
+*.pem
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+*.launch
+.settings/
+
+# Misc
+*.log
+.bolt/
+.cache/
+.temp/
+.tmp/
+*.bak
+*.swp
+*.swo
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# PWA
+public/sw.js
+public/workbox-*.js
+public/worker-*.js
+public/fallback-*.js
+
+# Vercel
+.vercel/
+
+# Turborepo
+.turbo/
+
+# Build outputs
+dist/
+build/
+out/
+.output/
+
+# Storybook
+storybook-static/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+
+# Additional patterns based on codebase
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Chain-specific
+.aptos/
+.sui/
+.anchor/
+.solana/
+
+# Cache directories
+.cache/
+.next-cache/
+.eslintcache
+.prettiercache
+
+# Generated files
+*.generated.*
+generated/
+.generated/
+
+# Development artifacts
+*.development.*
+*.development
+.development/
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Logs and monitoring
+logs/
+*.log.*
+monitoring/
+.monitoring/
+
+# API keys and secrets
+.secret-*
+*.secret
+secrets/
+.secrets/
+
+# Dependency lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml

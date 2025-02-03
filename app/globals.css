@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Core colors */
+    --color-black: 0 0% 4%;
+    --color-white: 0 0% 82%;
+    --color-gray: 0 0% 8%;
+    --color-gray-muted: 0 0% 55%;
+    
+    /* Semantic colors */
+    --background: var(--color-black);
+    --foreground: var(--color-white);
+    --card: 0 0% 6%;
+    --card-foreground: var(--color-white);
+    --popover: 0 0% 6%;
+    --popover-foreground: var(--color-white);
+    --primary: 270 20% 75%;
+    --primary-foreground: var(--color-black);
+    --secondary: var(--color-gray);
+    --secondary-foreground: var(--color-white);
+    --muted: var(--color-gray);
+    --muted-foreground: var(--color-gray-muted);
+    --accent: 180 15% 75%;
+    --accent-foreground: var(--color-black);
+    --destructive: 0 30% 60%;
+    --destructive-foreground: var(--color-white);
+    
+    /* UI elements */
+    --border: 0 0% 10%;
+    --input: 0 0% 10%;
+    --ring: var(--primary);
+    --radius: 0.5rem;
+
+    /* Scrollbar */
+    --scrollbar-width: 6px;
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: hsl(var(--muted-foreground) / 0.3);
+    --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.5);
+
+    /* Mobile-specific variables */
+    --mobile-touch-target: 44px;
+    --mobile-padding: 16px;
+    --mobile-font-size: 16px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    min-height: 100vh;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+}
+
+@layer utilities {
+  .layout-with-tracker {
+    position: relative;
+    height: 100dvh; /* Using dynamic viewport height */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    contain: content; /* Improve performance */
+  }
+
+  /* Custom scrollbar styles */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: var(--scrollbar-width);
+    height: var(--scrollbar-width);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: calc(var(--scrollbar-width) / 2);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+
+  /* Hide scrollbar utilities */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Additional optimized utilities */
+  .gpu {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Mobile optimizations */
+  @media (max-width: 768px) {
+    .mobile-safe-area {
+      padding-left: max(var(--mobile-padding), env(safe-area-inset-left));
+      padding-right: max(var(--mobile-padding), env(safe-area-inset-right));
+      padding-bottom: max(var(--mobile-padding), env(safe-area-inset-bottom));
+    }
+
+    .mobile-touch-target {
+      min-height: var(--mobile-touch-target);
+      min-width: var(--mobile-touch-target);
+    }
+
+    .mobile-text {
+      font-size: var(--mobile-font-size);
+      line-height: 1.5;
+    }
+
+    .mobile-snap-scroll {
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .mobile-snap-scroll > * {
+      scroll-snap-align: start;
+    }
+  }
+}

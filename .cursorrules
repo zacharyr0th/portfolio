@@ -1,0 +1,116 @@
+title: Cross-Platform Portfolio Management Tool
+
+includes:
+  - "**/*.{js,ts,jsx,tsx,py,sol}"
+  - "**/*.json"
+  - "**/*.yml"
+  - "**/*.env.example"
+
+excludes:
+  - "**/node_modules/**"
+  - "**/build/**"
+  - "**/dist/**"
+  - "**/.env"
+  - "**/venv/**"
+  - "**/__pycache__/**"
+  - "**/coverage/**"
+
+classifications:
+  # Core Application
+  - id: core
+    description: "Core application logic and infrastructure"
+    files:
+      - "src/core/**"
+      - "src/config/**"
+      - "src/types/**"
+
+  # Blockchain Integration
+  - id: blockchain
+    description: "Blockchain connectivity and smart contract interactions"
+    files:
+      - "src/blockchain/**"
+      - "contracts/**"
+      - "src/web3/**"
+
+  # Banking Integration
+  - id: banking
+    description: "Traditional banking APIs and services"
+    files:
+      - "src/banking/**"
+      - "src/services/banking/**"
+
+  # Brokerage Integration
+  - id: brokerage
+    description: "Stock market and securities trading integration"
+    files:
+      - "src/brokerage/**"
+      - "src/services/trading/**"
+
+  # Crypto Exchange Integration
+  - id: crypto
+    description: "Centralized crypto exchange APIs and services"
+    files:
+      - "src/exchanges/**"
+      - "src/services/crypto/**"
+
+  # Authentication & Security
+  - id: auth
+    description: "Authentication, authorization, and security"
+    files:
+      - "src/auth/**"
+      - "src/security/**"
+
+  # User Interface
+  - id: ui
+    description: "Frontend components and UI logic"
+    files:
+      - "src/components/**"
+      - "src/pages/**"
+      - "src/styles/**"
+
+  # Data Management
+  - id: data
+    description: "Data models, storage, and state management"
+    files:
+      - "src/models/**"
+      - "src/store/**"
+      - "src/db/**"
+
+  # Testing
+  - id: tests
+    description: "Test files and testing utilities"
+    files:
+      - "**/*.test.{js,ts,jsx,tsx}"
+      - "**/*.spec.{js,ts,jsx,tsx}"
+      - "tests/**"
+      - "__tests__/**"
+
+  # Configuration
+  - id: config
+    description: "Configuration and environment files"
+    files:
+      - "*.config.{js,ts}"
+      - "*.json"
+      - "*.yml"
+      - ".env.example"
+
+customRules:
+  - name: "Secure API Keys"
+    description: "Ensure API keys and secrets are not committed"
+    pattern: "(api[_-]?key|api[_-]?secret|password|secret|token)\\s*[=:]\\s*['|\"][^'\"]+['|\"]"
+    messageOnError: "API keys and secrets should not be committed. Use environment variables instead."
+
+  - name: "Blockchain Address Format"
+    description: "Validate address format"
+    pattern: "0x[a-fA-F0-9]{40}"
+    messageOnError: "Invalid address format"
+
+  - name: "Required Error Handling"
+    description: "Ensure proper error handling in API calls"
+    pattern: "try\\s*{[^}]+}\\s*catch"
+    messageOnError: "API calls should include proper error handling"
+
+  - name: "Transaction Safety"
+    description: "Ensure transaction validation"
+    pattern: "transaction|transfer|send|withdraw"
+    messageOnError: "Financial transactions should include validation and security checks" 

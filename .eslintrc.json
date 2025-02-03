@@ -1,0 +1,17 @@
+{
+    "extends": ["next/core-web-vitals", "plugin:@typescript-eslint/recommended"],
+    "plugins": ["@typescript-eslint"],
+    "rules": {
+        "@typescript-eslint/no-unused-vars": "off",
+        "@typescript-eslint/no-explicit-any": "off",
+        "no-console": "off",
+        "prefer-const": "warn",
+        "eqeqeq": ["error", "always"]
+    },
+    "settings": {
+        "react": {
+            "version": "detect"
+        }
+    },
+    "ignorePatterns": ["node_modules/", ".next/", "out/", "public/"]
+}
