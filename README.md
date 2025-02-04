@@ -123,4 +123,3 @@ When adding a new integration:
 1. Follow the appropriate guide ([Chains](lib/chains/README.md) or [CEX](lib/cex/README.md))
 2. Use existing implementations as references
 3. Ensure all checklist items are completed
-4. Add proper documentation and tests
