@@ -158,7 +158,7 @@ function CexCardComponent({
                                     const price = balance.usdValue / quantity
                                     return (
                                         <TokenBalance
-                                            key={balance.token.symbol}
+                                            key={`${account.id}-${balance.token.symbol}`}
                                             token={balance.token}
                                             quantity={Number(quantity.toFixed(3))}
                                             price={Number(price.toFixed(3))}
