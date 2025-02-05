@@ -206,6 +206,7 @@ export const BaseCard = memo(function BaseCardComponent({
             className={cn(
                 'relative overflow-hidden transition-all duration-200',
                 isCompact ? 'p-2' : 'p-3',
+                styles.bgColor,
                 className
             )}
         >
