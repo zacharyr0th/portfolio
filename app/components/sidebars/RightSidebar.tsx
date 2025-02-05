@@ -3,7 +3,7 @@
 import { Separator } from '@/app/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { AlertCircle, ChevronDown } from 'lucide-react'
-import { memo, useMemo, useState } from 'react'
+import { memo, useMemo, useState, useEffect } from 'react'
 import { useMarketData } from './use-market-data'
 import {
     Tooltip,
@@ -128,6 +128,21 @@ const MarketContent = memo(() => {
     } = crypto
 
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
+
+    // Set all sections open when data loads
+    useEffect(() => {
+        if (cryptoSections.length > 0) {
+            const initialState = cryptoSections.reduce(
+                (acc, section) => ({
+                    ...acc,
+                    [section.title]: true,
+                }),
+                {}
+            )
+            setOpenSections(initialState)
+        }
+    }, [cryptoSections])
+
     const allSectionsOpen =
         Object.values(openSections).every(Boolean) && Object.keys(openSections).length > 0
 

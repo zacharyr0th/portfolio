@@ -180,7 +180,7 @@ MobileToggleButton.displayName = 'MobileToggleButton'
 // Memoized content area
 const SidebarContent = React.forwardRef<HTMLDivElement, { children: React.ReactNode }>(
     ({ children }, ref) => (
-        <ScrollArea className="flex-1 h-[calc(100vh-2.75rem)]" type="hover" ref={ref}>
+        <ScrollArea className="flex-1" type="hover" ref={ref}>
             <div>{children}</div>
         </ScrollArea>
     )
@@ -227,7 +227,7 @@ function BaseSidebarComponent({
     const containerClasses = useMemo(
         () =>
             cn(
-                'relative h-screen',
+                'relative',
                 isMobile
                     ? 'w-screen'
                     : isOpen
@@ -241,7 +241,7 @@ function BaseSidebarComponent({
     const desktopButtonClasses = useMemo(
         () =>
             cn(
-                'absolute z-50',
+                'absolute z-40',
                 'h-16 w-4',
                 'bg-background hover:bg-background',
                 'border-y border-border/50',
@@ -261,7 +261,7 @@ function BaseSidebarComponent({
     const mobileButtonClasses = useMemo(
         () =>
             cn(
-                'fixed z-50',
+                'fixed z-40',
                 'h-12 w-12',
                 'bg-background/95',
                 'border border-border/50',

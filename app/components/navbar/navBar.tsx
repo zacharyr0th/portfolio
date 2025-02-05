@@ -101,7 +101,7 @@ export const NavBar = memo(() => {
 
     return (
         <TooltipProvider delayDuration={300}>
-            <div className="sticky top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="sticky top-0 left-0 right-0 z-[100] bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <Card className="border-b rounded-none shadow-sm">
                     <div className="container mx-auto max-w-full px-2">
                         <div className="flex h-12 items-center justify-between gap-2">
