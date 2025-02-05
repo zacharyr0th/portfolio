@@ -124,12 +124,14 @@ const solanaHandlerInstance = new BaseChainHandler({
                 const lamports = accountInfo.value.lamports
                 // Only add SOL balance if it's greater than 0.000001 SOL (dust threshold)
                 if (lamports > 1000) {
-                    balances.push({
+                    // Add native SOL balance first
+                    balances.unshift({
                         token: {
                             symbol: 'SOL',
                             name: 'Solana',
                             decimals: 9,
                             tokenAddress: NATIVE_SOL_MINT,
+                            isNative: true,
                         },
                         balance: lamports.toString(),
                     })
@@ -145,6 +147,10 @@ const solanaHandlerInstance = new BaseChainHandler({
 
                         const { info } = parsed
                         const { mint, tokenAmount } = info
+                        
+                        // Skip wrapped SOL to avoid duplication with native SOL
+                        if (mint === NATIVE_SOL_MINT) continue
+
                         const tokenInfo = TOKEN_SYMBOL_MAP[mint] || {
                             symbol: mint.slice(0, 6) + '...',
                             name: 'Unknown Token',

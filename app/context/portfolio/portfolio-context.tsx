@@ -2,7 +2,6 @@ import {
     createContext,
     useContext,
     useEffect,
-    useState,
     ReactNode,
     useCallback,
     useReducer,
@@ -22,6 +21,9 @@ import {
     Account,
 } from '@/app/components/accounts/cards/types'
 import { logger } from '@/lib/utils/core/logger'
+
+// Add error handling utilities
+const createError = (message: string): Error => new Error(message)
 
 // Optimized interfaces
 export interface PortfolioDataPoint {
@@ -46,14 +48,14 @@ interface PortfolioState {
     accounts: Account[]
     wallets: Record<string, WalletAccount>
     isLoading: boolean
-    error: string | null
+    error: Error | null
     lastUpdated: string
     isPrivate: boolean
 }
 
 type PortfolioAction =
     | { type: 'SET_LOADING'; payload: boolean }
-    | { type: 'SET_ERROR'; payload: string | null }
+    | { type: 'SET_ERROR'; payload: Error | null }
     | { type: 'SET_DATA'; payload: Partial<PortfolioState> }
     | { type: 'UPDATE_ACCOUNT_VALUE'; payload: { id: string; value: number } }
     | { type: 'TOGGLE_PRIVACY' }
@@ -153,7 +155,14 @@ interface PortfolioContextType extends PortfolioState {
 
 const PortfolioContext = createContext<PortfolioContextType | null>(null)
 
-// Optimized provider with memoization
+const PortfolioErrorFallback = ({ error }: { error: Error }) => (
+    <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error loading portfolio data</AlertTitle>
+        <p>{error.message}</p>
+    </Alert>
+)
+
 export function PortfolioProvider({ children }: { children: ReactNode }) {
     const [state, dispatch] = useReducer(portfolioReducer, {
         ...initialState,
@@ -164,29 +173,28 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
             ...AccountService.getCreditAccounts(),
         ],
     })
-    const [error, setError] = useState<Error | null>(null)
 
-    // Remove the duplicate initialization useEffect since we're handling wallet loading in the other useEffect
     useEffect(() => {
         const initializeWalletAccounts = async () => {
             try {
+                dispatch({ type: 'SET_LOADING', payload: true })
                 const wallets = await AccountService.getWalletAccounts()
                 const nonWalletAccounts = state.accounts.filter(acc => acc.type !== 'wallet')
                 dispatch({
                     type: 'SET_DATA',
                     payload: {
-                        accounts: [
-                            ...wallets,
-                            ...nonWalletAccounts,
-                        ],
+                        accounts: [...wallets, ...nonWalletAccounts],
                     },
                 })
             } catch (error) {
-                console.error('Failed to initialize wallet accounts:', error)
+                const err = error instanceof Error ? error : createError('Failed to load wallet accounts')
+                logger.error('Failed to initialize wallet accounts:', err)
                 dispatch({
                     type: 'SET_ERROR',
-                    payload: 'Failed to load wallet accounts',
+                    payload: err,
                 })
+            } finally {
+                dispatch({ type: 'SET_LOADING', payload: false })
             }
         }
 
@@ -195,78 +203,58 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
     const handleAccountValueUpdate = useCallback((id: string, value: number) => {
         try {
+            if (!isFinite(value)) {
+                logger.warn(`Invalid value for account ${id}:`, { value })
+                return
+            }
+
+            // Get the current account
+            const account = state.accounts.find(a => a.id === id)
+            if (!account) {
+                logger.warn(`Account not found: ${id}`)
+                return
+            }
+
+            // Only update if the value has changed significantly (more than 0.01%)
+            const currentValue = account.value || 0
+            if (Math.abs(value - currentValue) / (currentValue || 1) <= 0.0001) {
+                return
+            }
+
             dispatch({ type: 'UPDATE_ACCOUNT_VALUE', payload: { id, value } })
         } catch (err) {
-            logger.error(
-                'Error updating account value:',
-                err instanceof Error ? err : new Error(String(err))
-            )
-            setError(err as Error)
+            const error = err instanceof Error ? err : createError('Error updating account value')
+            logger.error('Error updating account value:', error)
+            dispatch({ type: 'SET_ERROR', payload: error })
         }
-    }, [])
+    }, [state.accounts])
 
     const refreshData = useCallback(async () => {
         try {
             dispatch({ type: 'SET_LOADING', payload: true })
-            const walletAccounts = await AccountService.getWalletAccounts()
-            const accounts = [
-                ...walletAccounts,
-                ...AccountService.getBankAccounts(),
-                ...AccountService.getBrokerAccounts(),
-                ...AccountService.getCexAccounts(),
-                ...AccountService.getCreditAccounts(),
-            ]
-
-            // Calculate balances from the fresh accounts list
-            const balances = accounts.reduce(
-                (acc, account) => {
-                    acc.total += account.value || 0
-                    switch (account.type) {
-                        case 'wallet':
-                            acc.wallets += account.value || 0
-                            break
-                        case 'cex':
-                            acc.cex += account.value || 0
-                            break
-                        case 'broker':
-                            acc.broker += account.value || 0
-                            break
-                        case 'bank':
-                            acc.bank += account.value || 0
-                            break
-                        case 'credit':
-                            acc.credit += account.value || 0
-                            break
-                    }
-                    return acc
-                },
-                { total: 0, wallets: 0, cex: 0, broker: 0, bank: 0, credit: 0 }
-            )
-
+            const wallets = await AccountService.getWalletAccounts()
+            const nonWalletAccounts = state.accounts.filter(acc => acc.type !== 'wallet')
             dispatch({
                 type: 'SET_DATA',
                 payload: {
-                    currentBalance: balances,
-                    accounts,
+                    accounts: [...wallets, ...nonWalletAccounts],
                     lastUpdated: new Date().toISOString(),
                 },
             })
         } catch (err) {
-            dispatch({ type: 'SET_ERROR', payload: (err as Error).message })
-            setError(err as Error)
+            const error = err instanceof Error ? err : createError('Failed to refresh data')
+            logger.error('Error refreshing data:', error)
+            dispatch({ type: 'SET_ERROR', payload: error })
         } finally {
             dispatch({ type: 'SET_LOADING', payload: false })
         }
-    }, [])
+    }, [state.accounts])
 
     const copyToClipboard = useCallback(async (text: string) => {
         try {
             await navigator.clipboard.writeText(text)
         } catch (err) {
-            logger.error(
-                'Failed to copy to clipboard:',
-                err instanceof Error ? err : new Error(String(err))
-            )
+            logger.error('Failed to copy to clipboard:', createError(err instanceof Error ? err.message : String(err)))
         }
     }, [])
 
@@ -289,47 +277,37 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'TOGGLE_PRIVACY' })
     }, [])
 
-    const value = useMemo(
-        () => ({
-            ...state,
-            dispatch,
-            refreshData,
-            copyToClipboard,
-            getExplorerLink,
-            handleAccountValueUpdate,
-            togglePrivacy,
-        }),
-        [
-            state,
-            refreshData,
-            copyToClipboard,
-            getExplorerLink,
-            handleAccountValueUpdate,
-            togglePrivacy,
-        ]
-    )
+    const contextValue = useMemo(() => ({
+        ...state,
+        dispatch,
+        refreshData,
+        copyToClipboard,
+        getExplorerLink,
+        handleAccountValueUpdate,
+        togglePrivacy,
+    }), [
+        state,
+        refreshData,
+        copyToClipboard,
+        getExplorerLink,
+        handleAccountValueUpdate,
+        togglePrivacy,
+    ])
 
-    if (error) {
-        return (
-            <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error loading portfolio data</AlertTitle>
-                <p>{error.message}</p>
-            </Alert>
-        )
+    // Show error state if there's an error
+    if (state.error) {
+        return <PortfolioErrorFallback error={state.error} />
     }
 
     return (
         <ErrorBoundary
-            onError={error => {
-                logger.error(
-                    'Portfolio provider error:',
-                    error instanceof Error ? error : new Error(String(error))
-                )
-                setError(error)
+            onError={(error) => {
+                logger.error('Portfolio provider error:', error)
             }}
         >
-            <PortfolioContext.Provider value={value}>{children}</PortfolioContext.Provider>
+            <PortfolioContext.Provider value={contextValue}>
+                {children}
+            </PortfolioContext.Provider>
         </ErrorBoundary>
     )
 }

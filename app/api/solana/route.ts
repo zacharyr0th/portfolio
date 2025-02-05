@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { logger } from '@/lib/utils/core/logger'
+import { chainInfo } from '@/lib/chains/config'
 
 // Security headers
-const securityHeaders = {
+const corsHeaders = {
     'Content-Security-Policy': [
         "default-src 'self'",
         "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
@@ -23,21 +24,14 @@ const securityHeaders = {
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
 }
 
-// CORS headers
-const corsHeaders = {
-    ...securityHeaders,
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-}
-
 // Rate limiting
 const RATE_LIMIT_WINDOW = 60000 // 1 minute
 const MAX_REQUESTS_PER_WINDOW = 30
 const requestTimestamps: number[] = []
 
-// Fallback RPC endpoints
+// Fallback RPC endpoints from chain config
 const RPC_ENDPOINTS = [
+    chainInfo.solana.rpcEndpoint,
     'https://api.mainnet-beta.solana.com',
     'https://solana-api.projectserum.com',
     'https://rpc.ankr.com/solana'
@@ -93,13 +87,13 @@ export async function POST(request: Request) {
         const body = await request.json()
         const { method, params } = body
 
-        // Try Helius first
+        // Try primary RPC first
         try {
-            const heliusUrl = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`
-            const data = await makeRpcRequest(method, params, heliusUrl)
+            const primaryRpc = chainInfo.solana.rpcEndpoint
+            const data = await makeRpcRequest(method, params, primaryRpc)
             return NextResponse.json(data, { headers: corsHeaders })
-        } catch (heliusError) {
-            logger.warn('Helius RPC failed, trying fallbacks:', { error: heliusError })
+        } catch (primaryError) {
+            logger.warn('Primary Solana RPC failed, trying fallbacks:', { error: primaryError })
             
             // Try fallback endpoints
             for (const endpoint of RPC_ENDPOINTS) {
@@ -113,12 +107,13 @@ export async function POST(request: Request) {
             }
 
             // If all RPCs fail, throw the original error
-            throw heliusError
+            throw primaryError
         }
     } catch (error) {
-        logger.error('Error in Solana API route:', error instanceof Error ? error : new Error(String(error)))
+        const err = error instanceof Error ? error : new Error('Unknown error occurred')
+        logger.error('Error in Solana API route:', err)
         return NextResponse.json(
-            { error: 'Internal server error' },
+            { error: err.message },
             { status: 500, headers: corsHeaders }
         )
     }

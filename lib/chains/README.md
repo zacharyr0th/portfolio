@@ -1,9 +1,10 @@
 # Blockchain Integration Guide
 
-This directory contains the integration layer for blockchain networks. Follow this guide to add support for new chains.
+This guide provides step-by-step instructions for adding new blockchain network support to the portfolio platform.
 
 ## Directory Structure
 
+Each chain integration must follow this structure:
 ```
 lib/chains/
 ├── [chain]/                # Chain-specific directory (e.g., solana, aptos, sui)
@@ -17,16 +18,9 @@ lib/chains/
 └── index.ts             # Export all chain handlers
 ```
 
-## Step-by-Step Integration Guide
+## Implementation Requirements
 
-### 1. Create Chain Directory
-```bash
-mkdir lib/chains/[chain]
-```
-
-### 2. Implement Required Files
-
-#### a. types.ts
+#### types.ts
 ```typescript
 // Define chain-specific types
 export interface TokenBalance {
@@ -47,7 +41,7 @@ export interface TokenPrice {
 // Add any other chain-specific types
 ```
 
-#### b. index.ts
+#### index.ts
 ```typescript
 import { ChainHandler, TokenBalance, TokenPrice } from '../types';
 import { Cache, CACHE_TTL, CACHE_STALE_TIME } from '../baseHandler';
@@ -80,7 +74,7 @@ export const chainHandler: ChainHandler = {
 };
 ```
 
-### 3. Create API Route
+## API Route Implementation
 
 Create `app/api/[chain]/route.ts`:
 ```typescript
@@ -99,9 +93,9 @@ export async function POST(req: Request) {
 }
 ```
 
-### 4. Update Configuration
+## Configuration
 
-In `lib/chains/config.ts`:
+Update `lib/chains/config.ts`:
 ```typescript
 export const CHAIN_CONFIG = {
     [chain]: {
@@ -113,48 +107,8 @@ export const CHAIN_CONFIG = {
 }
 ```
 
-### 5. Update Exports
+## Implementation Checklist
 
-In `lib/chains/index.ts`:
-```typescript
-export * from './[chain]';
-```
-
-## Implementation Requirements
-
-| Category | Requirements | Implementation Details |
-|----------|--------------|----------------------|
-| **RPC Integration** | Connection Management | - Handle RPC endpoint configuration<br>- Implement connection pooling<br>- Monitor connection health |
-| | Request Handling | - Implement proper request formatting<br>- Handle RPC-specific data types<br>- Validate responses |
-| | Rate Limiting | - Respect RPC rate limits<br>- Implement request queuing<br>- Handle concurrent requests |
-| **Token Management** | Token Lists | - Integrate with token lists<br>- Handle token metadata<br>- Cache token information |
-| | Balance Tracking | - Track native token balances<br>- Handle SPL/fungible tokens<br>- Support NFTs if applicable |
-| | Price Updates | - Implement price feeds<br>- Handle price updates<br>- Maintain price history |
-| **Error Handling** | RPC Errors | - Handle node failures<br>- Implement fallback nodes<br>- Retry failed requests |
-| | Data Validation | - Validate on-chain data<br>- Handle malformed responses<br>- Implement data sanitization |
-| | Recovery | - Implement graceful degradation<br>- Handle network outages<br>- Maintain service availability |
-| **Performance** | Caching | - Cache chain data<br>- Implement SWR pattern<br>- Handle cache invalidation |
-| | Optimization | - Batch RPC requests<br>- Minimize network calls<br>- Optimize data structures |
-| | Monitoring | - Track RPC performance<br>- Monitor error rates<br>- Log important events |
-
-## Example Integration
-
-See the existing implementations for reference:
-- `lib/chains/solana/` - Complete Solana integration
-- `lib/chains/aptos/` - Aptos Move-based chain
-- `lib/chains/sui/` - Sui Move-based chain
-
-## Support
-
-For questions or issues:
-1. Check existing chain implementations
-2. Review chain documentation
-3. Test thoroughly in development environment
-4. Document chain-specific considerations
-
-## Checklist
-
-- [ ] Create chain directory structure
 - [ ] Implement types and interfaces
 - [ ] Create chain handler
 - [ ] Set up RPC integration
@@ -163,4 +117,12 @@ For questions or issues:
 - [ ] Set up caching
 - [ ] Add explorer integration
 - [ ] Update exports
-- [ ] Document chain-specific details 
+- [ ] Write documentation
+- [ ] Update main README
+
+## Example Implementations
+
+See these complete implementations for reference:
+- `solana/` - Complete implementation with SPL token support
+- `aptos/` - Move-based chain example
+- `sui/` - Alternative Move-based implementation 

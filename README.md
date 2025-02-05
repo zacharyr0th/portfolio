@@ -111,8 +111,9 @@ Portfolio is designed to be extensible, with the ability to add as many blockcha
 
 ## Contributing
 
-Contributions are welcome - please follow these steps:
+Please read [Contributing Guidelines](CONTRIBUTING.md) for detailed information about our development process, branch structure, and code submission guidelines.
 
+Quick start:
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/NewFeature`)
 3. Commit your changes (`git commit -m 'Add some NewFeature'`)

@@ -22,7 +22,11 @@ const nextConfig = {
 
   // Environment Variables Configuration
   env: {
-    // Expose all environment variables that start with SOLANA_WALLET_, APTOS_WALLET_, or SUI_WALLET_
+    // Only expose necessary environment variables to the client
+    API_URL: process.env.API_URL || '/api',
+    APP_URL: process.env.APP_URL || 'http://localhost:3000',
+    DEFAULT_CHAIN: process.env.DEFAULT_CHAIN || 'aptos',
+    // Expose wallet addresses for client-side configuration
     ...Object.keys(process.env).reduce((acc, key) => {
       if (key.match(/^(SOLANA|APTOS|SUI)_WALLET_/)) {
         acc[key] = process.env[key]

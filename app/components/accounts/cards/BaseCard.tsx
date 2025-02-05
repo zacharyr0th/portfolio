@@ -1,6 +1,6 @@
 import { Card } from '@/app/components/ui/card'
 import { ChevronDown } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils/core/format'
+import { formatCurrency, formatRelativeTime } from '@/lib/utils/core/format'
 import { cn } from '@/lib/utils'
 import type {
     AccountType,
@@ -10,8 +10,8 @@ import type {
     CexPlatform,
     CreditPlatform,
     DebitPlatform,
+    BaseAccount,
 } from '@/app/components/accounts/cards/types'
-import type { BaseCardProps } from './types'
 import { ACCOUNT_TYPE_STYLES } from './constants'
 import { memo } from 'react'
 import { Icon } from './Icon'
@@ -143,96 +143,161 @@ export const cardStyles = {
         ),
 } as const
 
-// Memoize the BaseCard component
+interface LoadingProps {
+    className?: string
+}
+
+const Loading = memo(function Loading({ className }: LoadingProps) {
+    return (
+        <div className={cn('space-y-2 animate-pulse', className)}>
+            <div className="h-2 bg-muted rounded w-24" />
+            <div className="h-2 bg-muted rounded w-32" />
+            <div className="h-2 bg-muted rounded w-28" />
+        </div>
+    )
+})
+
+interface ErrorProps {
+    message: string
+    className?: string
+}
+
+const Error = memo(function Error({ message, className }: ErrorProps) {
+    return (
+        <div className={cn('p-2 rounded-lg bg-destructive/10 text-destructive text-sm', className)}>
+            {message}
+        </div>
+    )
+})
+
+interface BaseCardProps {
+    account: BaseAccount & {
+        chain?: ChainType
+        platform?: BankPlatform | BrokerPlatform | CexPlatform | CreditPlatform | DebitPlatform
+    }
+    expanded?: boolean
+    onToggle?: () => void
+    children?: React.ReactNode
+    className?: string
+    variant?: 'detailed' | 'compact'
+    isLoading?: boolean
+    error?: string | null
+    lastUpdated?: number
+}
+
 export const BaseCard = memo(function BaseCardComponent({
     account,
-    expanded,
+    expanded = false,
     onToggle,
     children,
     className,
     variant = 'detailed',
+    isLoading = false,
+    error = null,
+    lastUpdated,
 }: BaseCardProps) {
     const { isPrivate } = usePortfolio()
     const { type, name, value } = account
     const styles = ACCOUNT_TYPE_STYLES[type]
+    const isCompact = variant === 'compact'
 
     return (
         <Card
             className={cn(
                 'relative overflow-hidden transition-all duration-200',
-                variant === 'compact' ? 'p-2.5' : 'p-3.5',
+                isCompact ? 'p-2' : 'p-3',
                 className
             )}
         >
-            <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                    <AccountIcon
-                        type={type}
-                        chain={'chain' in account ? account.chain : undefined}
-                        platform={'platform' in account ? account.platform : undefined}
-                        className={cn(
-                            'h-6 w-6 md:h-7 md:w-7',
-                            variant === 'compact' && 'h-4 w-4 md:h-5 md:w-5'
-                        )}
-                    />
-                    <div>
-                        <div
+            <div className="flex flex-col h-full">
+                {/* Header */}
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <AccountIcon
+                            type={type}
+                            chain={'chain' in account ? account.chain : undefined}
+                            platform={'platform' in account ? account.platform : undefined}
                             className={cn(
-                                'font-medium',
-                                variant === 'compact'
-                                    ? 'text-[10px] md:text-xs'
-                                    : 'text-xs md:text-sm'
+                                'flex-shrink-0',
+                                isCompact ? 'h-5 w-5' : 'h-6 w-6'
                             )}
-                        >
-                            {name}
-                        </div>
-                        {variant === 'detailed' && (
-                            <div className="text-xs text-muted-foreground">{styles.label}</div>
-                        )}
-                    </div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                    <div className="text-right">
-                        <div
-                            className={cn(
-                                'font-mono font-medium tabular-nums',
-                                variant === 'compact'
-                                    ? 'text-xs md:text-sm'
-                                    : 'text-sm md:text-base'
-                            )}
-                        >
-                            {isPrivate ? '•••••' : formatCurrency(value)}
-                        </div>
-                        {variant === 'detailed' && (
-                            <div className="text-xs text-muted-foreground">Balance</div>
-                        )}
-                    </div>
-                    {children && (
-                        <button
-                            onClick={onToggle}
-                            className="p-0.5 hover:bg-accent rounded-md transition-colors"
-                            aria-label={expanded ? 'Collapse' : 'Expand'}
-                        >
-                            <ChevronDown
+                        />
+                        <div className="min-w-0">
+                            <div
                                 className={cn(
-                                    'h-4 w-4 transition-transform duration-200',
-                                    expanded && 'rotate-180'
+                                    'font-medium truncate',
+                                    isCompact ? 'text-xs' : 'text-sm'
                                 )}
-                            />
-                        </button>
-                    )}
+                            >
+                                {name}
+                            </div>
+                            {!isCompact && (
+                                <div className="text-xs text-muted-foreground truncate">{styles.label}</div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="text-right">
+                            <div
+                                className={cn(
+                                    'font-mono font-medium tabular-nums',
+                                    isCompact ? 'text-xs' : 'text-sm'
+                                )}
+                            >
+                                {isPrivate ? '•••••' : formatCurrency(value)}
+                            </div>
+                            {!isCompact && (
+                                <div className="text-xs text-muted-foreground">Balance</div>
+                            )}
+                        </div>
+                        {onToggle && (
+                            <button
+                                onClick={onToggle}
+                                className="p-1 hover:bg-accent rounded-md transition-colors"
+                                aria-label={expanded ? 'Collapse' : 'Expand'}
+                            >
+                                <ChevronDown
+                                    className={cn(
+                                        'h-4 w-4 text-muted-foreground transition-transform duration-200',
+                                        expanded && 'rotate-180'
+                                    )}
+                                />
+                            </button>
+                        )}
+                    </div>
                 </div>
+
+                {/* Content */}
+                {expanded && (
+                    <div className="mt-3">
+                        {isLoading ? (
+                            <Loading />
+                        ) : error ? (
+                            <Error message={error} />
+                        ) : (
+                            children
+                        )}
+                    </div>
+                )}
+
+                {/* Footer */}
+                {!isCompact && (
+                    <div className="mt-auto pt-3">
+                        <div className="border-t border-border" />
+                        <div className="pt-3 text-xs text-muted-foreground/60">
+                            {lastUpdated ? (
+                                `Updated ${new Date(lastUpdated).toLocaleTimeString(undefined, {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true
+                                })}`
+                            ) : (
+                                'Not yet updated'
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
-            {children && (
-                <div
-                    className={cn(
-                        'transition-all duration-200 overflow-hidden',
-                        expanded ? 'max-h-[800px] opacity-100 mt-3' : 'max-h-0 opacity-0'
-                    )}
-                >
-                    {children}
-                </div>
-            )}
         </Card>
     )
 })

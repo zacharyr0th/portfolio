@@ -27,7 +27,9 @@ import { logger } from '@/lib/utils/core/logger'
 export * from './types'
 export * from './constants'
 
-interface AccountCardProps extends SharedCardProps {}
+interface AccountCardProps extends SharedCardProps {
+    showHiddenTokens?: boolean
+}
 
 function assertWalletChain(account: WalletAccount) {
     return isValidChain(account.chain) ? { ...account, chain: account.chain as ChainType } : null
@@ -53,6 +55,7 @@ export function AccountCard({
     compact = false,
     isExpanded = false,
     onUpdateValue,
+    showHiddenTokens = false,
 }: AccountCardProps) {
     switch (account.type) {
         case 'wallet': {
@@ -64,6 +67,7 @@ export function AccountCard({
                     compact={compact}
                     isExpanded={isExpanded}
                     onUpdateValue={onUpdateValue}
+                    showHiddenTokens={showHiddenTokens}
                 />
             )
         }
@@ -74,6 +78,7 @@ export function AccountCard({
                     compact={compact}
                     isExpanded={isExpanded}
                     onUpdateValue={onUpdateValue}
+                    showHiddenTokens={showHiddenTokens}
                 />
             )
         case 'broker':

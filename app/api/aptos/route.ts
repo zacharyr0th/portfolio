@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { logger } from '@/lib/utils/core/logger'
-import { AppError } from '@/lib/utils/core/error-handling'
+import { chainInfo } from '@/lib/chains/config'
 
 // Security headers
-const securityHeaders = {
+const corsHeaders = {
     'Content-Security-Policy': [
         "default-src 'self'",
         "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
@@ -24,14 +24,6 @@ const securityHeaders = {
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
 }
 
-// CORS headers
-const corsHeaders = {
-    ...securityHeaders,
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-}
-
 export async function POST(request: Request) {
     try {
         const body = await request.json()
@@ -41,8 +33,8 @@ export async function POST(request: Request) {
             throw new Error('No endpoint specified')
         }
 
-        // Use the public RPC URL from environment
-        const rpcUrl = process.env.APTOS_RPC_URL || 'https://fullnode.mainnet.aptoslabs.com/v1'
+        // Use the RPC URL from chain config
+        const rpcUrl = chainInfo.aptos.rpcEndpoint
         const response = await fetch(`${rpcUrl}${endpoint}`, {
             method: 'GET',
             headers: {

@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { logger } from '@/lib/utils/core/logger'
-import { AppError, handleApiError, type ErrorDetails } from '@/lib/utils/core/error-handling'
+import { chainInfo } from '@/lib/chains/config'
 
 // Security headers
-const securityHeaders = {
+const corsHeaders = {
     'Content-Security-Policy': [
         "default-src 'self'",
         "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
@@ -24,72 +24,79 @@ const securityHeaders = {
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
 }
 
-// CORS headers
-const corsHeaders = {
-    ...securityHeaders,
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+// Rate limiting
+const RATE_LIMIT_WINDOW = 60000 // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 30
+const requestTimestamps: number[] = []
+
+function canMakeRequest(): boolean {
+    const now = Date.now()
+    // Remove timestamps older than the window
+    while (
+        requestTimestamps.length > 0 &&
+        requestTimestamps[0]! < now - RATE_LIMIT_WINDOW
+    ) {
+        requestTimestamps.shift()
+    }
+    return requestTimestamps.length < MAX_REQUESTS_PER_WINDOW
 }
 
 export async function POST(request: Request) {
     try {
-        const rpcUrl = process.env.SUI_RPC_URL
-        if (!rpcUrl) {
-            throw new AppError('SUI_RPC_URL not configured', 'CONFIG_ERROR', 500)
+        if (!canMakeRequest()) {
+            return NextResponse.json(
+                { error: 'Rate limit exceeded' },
+                { status: 429, headers: { ...corsHeaders, 'Retry-After': '60' } }
+            )
         }
+
+        requestTimestamps.push(Date.now())
 
         const body = await request.json()
         const { method, params } = body
 
         if (!method) {
-            throw new AppError('Method is required', 'INVALID_REQUEST', 400)
+            throw new Error('No method specified')
         }
 
+        // Use the RPC URL from chain config
+        const rpcUrl = chainInfo.sui.rpcEndpoint
         const response = await fetch(rpcUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify({
                 jsonrpc: '2.0',
                 id: 1,
                 method,
-                params: params || [],
-            }),
+                params: params || []
+            })
         })
 
         if (!response.ok) {
-            const details: ErrorDetails = { statusText: response.statusText }
-            throw new AppError(
-                `Sui RPC request failed: ${response.statusText}`,
-                'RPC_ERROR',
-                response.status,
-                details
-            )
+            if (response.status === 429) {
+                return NextResponse.json(
+                    { error: 'Rate limit exceeded' },
+                    { status: 429, headers: { ...corsHeaders, 'Retry-After': '2' } }
+                )
+            }
+            throw new Error(`Sui API error: ${response.status}`)
         }
 
         const data = await response.json()
-        
         if (data.error) {
-            const details: ErrorDetails = { rpcError: data.error }
-            logger.error('Sui RPC returned error', undefined, { details })
-            throw new AppError(
-                data.error.message || 'Unknown Sui RPC error',
-                'RPC_ERROR',
-                500,
-                details
-            )
+            throw new Error(data.error.message || 'Sui RPC error')
         }
 
-        return NextResponse.json(data, {
-            headers: corsHeaders,
-        })
+        return NextResponse.json(data, { headers: corsHeaders })
     } catch (error) {
-        const appError = handleApiError(error)
-        logger.error('Error in Sui API route:', appError, { details: appError.toJSON() })
-        
+        const err = error instanceof Error ? error : new Error('Unknown error occurred')
+        logger.error('Error in Sui API route:', err)
         return NextResponse.json(
-            { error: appError.message },
-            { status: appError.statusCode, headers: corsHeaders }
+            { error: err.message },
+            { status: 500, headers: corsHeaders }
         )
     }
 }

@@ -23,6 +23,7 @@ export interface SolanaToken {
     logoURI?: string
     tags?: string[]
     verified?: boolean
+    isNative?: boolean
 }
 
 export interface TokenBalance {

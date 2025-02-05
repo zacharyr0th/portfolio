@@ -13,6 +13,7 @@ import {
 } from '@/lib/chains'
 import type { WalletAccount } from '../types'
 import { logger } from '@/lib/utils/core/logger'
+import { useLocalStorage } from '@/lib/hooks/useLocalStorage'
 
 // Constants
 const COPY_TIMEOUT_MS = 2000
@@ -42,6 +43,7 @@ interface WalletCardProps {
     compact?: boolean
     isExpanded?: boolean
     onUpdateValue?: (id: string, value: number) => void
+    showHiddenTokens?: boolean
 }
 
 function WalletCardComponent({
@@ -49,6 +51,7 @@ function WalletCardComponent({
     compact = false,
     isExpanded = false,
     onUpdateValue,
+    showHiddenTokens = false,
 }: WalletCardProps) {
     const [copied, setCopied] = useState(false)
     const [isOpen, setIsOpen] = useState(isExpanded)
@@ -61,6 +64,34 @@ function WalletCardComponent({
     const [retryCount, setRetryCount] = useState(0)
     const [lastFetchTime, setLastFetchTime] = useState(0)
     const abortControllerRef = useRef<AbortController>()
+    const lastValueRef = useRef<number>(0)
+    
+    // Add hidden tokens state
+    const [hiddenTokens, setHiddenTokens] = useLocalStorage<Record<string, string[]>>(
+        'hidden-tokens',
+        {}
+    )
+
+    const toggleHideToken = useCallback((symbol: string) => {
+        setHiddenTokens((prev: Record<string, string[]>) => {
+            const walletHidden = prev[account.id] || []
+            const isHidden = walletHidden.includes(symbol)
+            
+            if (isHidden) {
+                // Remove from hidden list
+                return {
+                    ...prev,
+                    [account.id]: walletHidden.filter((s: string) => s !== symbol)
+                }
+            } else {
+                // Add to hidden list
+                return {
+                    ...prev,
+                    [account.id]: [...walletHidden, symbol]
+                }
+            }
+        })
+    }, [account.id, setHiddenTokens])
 
     useEffect(() => {
         setIsOpen(isExpanded)
@@ -70,15 +101,23 @@ function WalletCardComponent({
         logger.debug(`Initializing chain handler for ${account.chain} wallet: ${account.id}`)
         if (!account.chain || !isValidChain(account.chain)) {
             logger.warn(`Invalid chain ${account.chain} for wallet: ${account.id}`)
+            setError(`Invalid chain: ${account.chain}`)
             return null
         }
         const handler = chainHandlers[account.chain]
         if (!handler) {
             logger.error(`Handler not found for chain ${account.chain} (wallet: ${account.id})`)
+            setError(`Unsupported chain: ${account.chain}`)
             return null
         }
         return handler
     }, [account.chain, account.id])
+
+    const handleCopy = useCallback(() => {
+        navigator.clipboard.writeText(account.publicKey)
+        setCopied(true)
+        setTimeout(() => setCopied(false), COPY_TIMEOUT_MS)
+    }, [account.publicKey])
 
     const fetchData = useCallback(
         async (shouldRetry = true) => {
@@ -96,7 +135,6 @@ function WalletCardComponent({
                 const cacheAge = now - cached.timestamp
                 const hasBalances = cached.balances.length > 0
                 const hasPrices = Object.keys(cached.prices).length > 0
-                // Use shorter cache duration if no balances or prices found
                 const effectiveMinRefresh = (hasBalances && hasPrices) ? 
                     MIN_REFRESH_INTERVAL : 
                     MIN_REFRESH_INTERVAL / 2
@@ -131,14 +169,124 @@ function WalletCardComponent({
                         REQUEST_TIMEOUT
                     )
 
-                    // Fetch balances and prices in parallel
-                    const [balancesResult, pricesResult] = await Promise.all([
-                        chainHandler.fetchBalances(account.publicKey),
-                        chainHandler.fetchPrices().catch(err => {
+                    // Fetch balances
+                    const balancesResult = await chainHandler.fetchBalances(account.publicKey)
+
+                    // Enhance token metadata for unknown tokens
+                    balancesResult.balances = balancesResult.balances.map(balance => {
+                        if (!balance.token.symbol || balance.token.symbol === 'Unknown Token') {
+                            // Get token address based on chain type
+                            let tokenAddress = ''
+                            if ('address' in balance.token && typeof balance.token.address === 'string') {
+                                tokenAddress = balance.token.address
+                            } else if ('tokenAddress' in balance.token && typeof balance.token.tokenAddress === 'string') {
+                                tokenAddress = balance.token.tokenAddress
+                            }
+
+                            const shortAddr = tokenAddress ? 
+                                `${tokenAddress.substring(0, 4)}...${tokenAddress.substring(-4)}` : 
+                                'Unknown'
+
+                            // Create chain-specific token object
+                            const baseToken = {
+                                symbol: shortAddr,
+                                name: tokenAddress || 'Unknown Token',
+                                decimals: balance.token.decimals,
+                            }
+
+                            switch (account.chain) {
+                                case 'solana':
+                                    return {
+                                        ...balance,
+                                        token: {
+                                            symbol: shortAddr,
+                                            name: tokenAddress || 'Unknown Token',
+                                            decimals: balance.token.decimals,
+                                            tokenAddress: tokenAddress,
+                                            chainId: 101, // Solana mainnet
+                                            verified: false,
+                                        }
+                                    } as ChainTokenBalance
+                                case 'aptos':
+                                case 'sui':
+                                    return {
+                                        ...balance,
+                                        token: {
+                                            symbol: shortAddr,
+                                            name: tokenAddress || 'Unknown Token',
+                                            decimals: balance.token.decimals,
+                                            tokenAddress: tokenAddress,
+                                        }
+                                    } as ChainTokenBalance
+                                default:
+                                    return balance
+                            }
+                        }
+                        return balance
+                    })
+
+                    // Fetch prices based on chain type
+                    let pricesResult = cached?.prices || {}
+                    if (account.chain === 'solana') {
+                        try {
+                            // Extract token addresses for Solana tokens
+                            const tokenAddresses = balancesResult.balances
+                                .filter((b): b is ChainTokenBalance & { token: { address: string } } => 
+                                    'address' in b.token && 
+                                    typeof b.token.address === 'string' &&
+                                    b.token.address.length > 0
+                                )
+                                .map(b => b.token.address)
+
+                            if (tokenAddresses.length > 0) {
+                                const response = await fetch(`/api/prices?tokens=${tokenAddresses.join(',')}`)
+                                if (response.ok) {
+                                    const data = await response.json()
+                                    const prices = data.prices as Record<string, number>
+                                    
+                                    // Convert Jupiter prices to the format expected by the component
+                                    pricesResult = Object.entries(prices).reduce((acc, [address, price]) => {
+                                        const token = balancesResult.balances.find(b => 
+                                            'address' in b.token && 
+                                            b.token.address === address
+                                        )
+                                        if (token) {
+                                            acc[token.token.symbol] = {
+                                                price: Number(price),
+                                                priceChange24h: 0,
+                                                lastUpdated: Date.now(),
+                                            }
+                                        }
+                                        return acc
+                                    }, {} as Record<string, ChainTokenPrice>)
+
+                                    // Log successful price fetches for debugging
+                                    logger.debug('Fetched Jupiter prices:', {
+                                        accountId: account.id,
+                                        tokenCount: Object.keys(prices).length,
+                                        tokens: Object.keys(pricesResult).join(', ')
+                                    })
+                                } else {
+                                    throw new Error(`Jupiter API returned ${response.status}`)
+                                }
+                            }
+                        } catch (priceError) {
+                            logger.warn('Error fetching Jupiter prices:', {
+                                accountId: account.id,
+                                error: priceError instanceof Error ? priceError.message : String(priceError),
+                                tokens: balancesResult.balances.map(b => ({
+                                    symbol: b.token.symbol,
+                                    address: 'address' in b.token ? b.token.address : undefined
+                                }))
+                            })
+                        }
+                    } else {
+                        // Use chain-specific price fetching for other chains
+                        pricesResult = await chainHandler.fetchPrices().catch(err => {
                             logger.warn(`Error fetching prices for ${account.id}:`, err)
                             return cached?.prices || {}
                         })
-                    ])
+                    }
 
                     clearTimeout(fetchTimeoutId)
 
@@ -217,155 +365,133 @@ function WalletCardComponent({
         return undefined
     }, [account.chain, account.publicKey, chainHandler, fetchData])
 
-    const formattedBalances = useMemo(() => {
-        if (!account.chain) return []
-
+    // Memoize the filtered balances calculation
+    const filteredBalances = useMemo(() => {
+        const walletHidden = hiddenTokens[account.id] || []
         return tokenData.balances
             .filter(balance => {
+                // Calculate token amount
                 const amount = Number(balance.balance) / Math.pow(10, balance.token.decimals)
-                // Only filter out dust amounts and zero balances
-                if (amount <= 0) return false
-
-                const price = tokenData.prices[balance.token.symbol]?.price ?? 0
-                const value = amount * price
-                const chainInfo = getChainInfo(account.chain)
-                const isMainToken = balance.token.symbol === chainInfo.nativeToken
-                const isMajorToken = ['BTC', 'ETH', 'SOL', 'APT', 'SUI', 'USDC', 'USDT', 'BEENZ'].includes(
-                    balance.token.symbol
-                )
-
-                // Keep if: value >= $0.01 OR main chain token OR major token
-                return value >= 0.01 || isMainToken || isMajorToken
+                
+                // Skip tokens with zero balance
+                if (amount === 0) return false
+                
+                // Show all tokens if showHiddenTokens is true
+                if (showHiddenTokens) return true
+                
+                // Otherwise filter out hidden tokens
+                return !walletHidden.includes(balance.token.symbol)
             })
             .sort((a, b) => {
-                const aValue =
-                    (Number(a.balance) / Math.pow(10, a.token.decimals)) *
-                    (tokenData.prices[a.token.symbol]?.price ?? 0)
-                const bValue =
-                    (Number(b.balance) / Math.pow(10, b.token.decimals)) *
-                    (tokenData.prices[b.token.symbol]?.price ?? 0)
+                const aAmount = Number(a.balance) / Math.pow(10, a.token.decimals)
+                const bAmount = Number(b.balance) / Math.pow(10, b.token.decimals)
+                const aValue = aAmount * (tokenData.prices[a.token.symbol]?.price || 0)
+                const bValue = bAmount * (tokenData.prices[b.token.symbol]?.price || 0)
                 return bValue - aValue
             })
-    }, [tokenData, account.chain])
+    }, [tokenData.balances, tokenData.prices, hiddenTokens, account.id, showHiddenTokens])
 
-    const handleCopy = useCallback(async () => {
-        if (!account.publicKey) return
-        try {
-            await navigator.clipboard.writeText(account.publicKey)
-            setCopied(true)
-            setTimeout(() => setCopied(false), COPY_TIMEOUT_MS)
-        } catch (err) {
-            logger.error(
-                'Failed to copy address:',
-                err instanceof Error ? err : new Error(String(err))
-            )
+    // Memoize the total value calculation
+    const totalValue = useMemo(() => {
+        const newValue = filteredBalances.reduce((sum, balance) => {
+            const amount = Number(balance.balance) / Math.pow(10, balance.token.decimals)
+            const price = tokenData.prices[balance.token.symbol]?.price || 0
+            return sum + (amount * price)
+        }, 0)
+        
+        // Only update if the value has changed significantly (more than 0.01%)
+        if (Math.abs(newValue - lastValueRef.current) / (lastValueRef.current || 1) > 0.0001) {
+            lastValueRef.current = newValue
+            return newValue
         }
-    }, [account.publicKey])
+        return lastValueRef.current
+    }, [filteredBalances, tokenData.prices])
 
-    const explorerUrl = useMemo(() => {
-        if (!chainHandler || !account.publicKey) return '#'
-        return chainHandler.getExplorerUrl(account.publicKey, account.id)
-    }, [chainHandler, account.publicKey, account.id])
+    // Notify parent of value changes
+    useEffect(() => {
+        if (onUpdateValue && !isLoading && !error && isFinite(totalValue)) {
+            onUpdateValue(account.id, totalValue)
+        }
+    }, [account.id, totalValue, onUpdateValue, isLoading, error])
 
     return (
         <BaseCard
-            account={account}
+            account={{
+                ...account,
+                value: totalValue,
+            }}
             expanded={isOpen}
             onToggle={() => setIsOpen(!isOpen)}
-            variant="detailed"
-            className={isOpen ? 'h-auto' : undefined}
+            variant={compact ? 'compact' : 'detailed'}
+            isLoading={isLoading}
+            error={error}
+            lastUpdated={lastFetchTime}
         >
-            {!compact && isOpen && (
-                <div className="flex flex-col gap-3 pt-1">
-                    {account.isColdStorage && (
-                        <Badge
-                            variant="secondary"
-                            className="self-start bg-blue-500/20 text-blue-500 text-xs"
+            {!compact && isOpen && !isLoading && !error && (
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                        <div className="flex-1 font-mono text-xs text-muted-foreground truncate">
+                            {account.publicKey}
+                        </div>
+                        <button
+                            onClick={handleCopy}
+                            className="p-1 hover:bg-accent rounded-md transition-colors"
+                            aria-label="Copy address"
                         >
-                            Cold
-                        </Badge>
-                    )}
-
-                    {account.publicKey && (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <div className="font-mono text-[10px] sm:text-xs tracking-tight text-muted-foreground/80 truncate flex-1 min-w-[120px]">
-                                <span>{account.publicKey.slice(0, 4)}</span>
-                                <span className="opacity-50">...</span>
-                                <span>{account.publicKey.slice(-4)}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={e => {
-                                        e.stopPropagation()
-                                        handleCopy()
+                            {copied ? (
+                                <Check className="h-3.5 w-3.5 text-success" />
+                            ) : (
+                                <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                        </button>
+                        <a
+                            href={(() => {
+                                switch (account.chain) {
+                                    case 'aptos':
+                                        return `https://explorer.aptoslabs.com/account/${account.publicKey}/coins?network=mainnet`
+                                    case 'sui':
+                                        return `https://suiscan.xyz/mainnet/account/${account.publicKey}`
+                                    default:
+                                        return getChainInfo(account.chain).explorer + '/address/' + account.publicKey
+                                }
+                            })()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 hover:bg-accent rounded-md transition-colors"
+                            aria-label="View on explorer"
+                        >
+                            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                        </a>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                        {filteredBalances.map(balance => {
+                            const amount = Number(balance.balance) / Math.pow(10, balance.token.decimals)
+                            const price = tokenData.prices[balance.token.symbol]?.price || 0
+                            const walletHidden = hiddenTokens[account.id] || []
+                            const isHidden = walletHidden.includes(balance.token.symbol)
+                            
+                            return (
+                                <TokenBalance
+                                    key={`${account.id}-${balance.token.symbol}`}
+                                    token={{
+                                        symbol: balance.token.symbol,
+                                        name: balance.token.name,
+                                        decimals: balance.token.decimals,
+                                        address: 'tokenAddress' in balance.token ? balance.token.tokenAddress : undefined
                                     }}
-                                    className="p-1.5 hover:bg-muted rounded-md transition-colors"
-                                    title="Copy address"
-                                >
-                                    {copied ? (
-                                        <Check className="h-3 w-3 text-green-500" />
-                                    ) : (
-                                        <Copy className="h-3 w-3 text-muted-foreground" />
-                                    )}
-                                </button>
-                                <a
-                                    href={explorerUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={e => e.stopPropagation()}
-                                    className="p-1.5 hover:bg-muted rounded-md transition-colors"
-                                    title="View in Explorer"
-                                >
-                                    <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                                </a>
-                            </div>
-                        </div>
-                    )}
-
-                    {isLoading && (
-                        <div className="text-sm text-muted-foreground animate-pulse">
-                            Loading balances...
-                        </div>
-                    )}
-
-                    {error && <div className="text-sm text-destructive">{error}</div>}
-
-                    {!isLoading && !error && formattedBalances.length > 0 && (
-                        <div className="overflow-x-auto w-full">
-                            <div className="grid w-full">
-                                {/* Token Rows */}
-                                <div className="flex flex-col gap-0.5">
-                                    {formattedBalances.map(balance => {
-                                        const amount = Number(
-                                            (
-                                                Number(balance.balance) /
-                                                Math.pow(10, balance.token.decimals)
-                                            ).toFixed(3)
-                                        )
-                                        const price = Number(
-                                            (
-                                                tokenData.prices[balance.token.symbol]?.price ?? 0
-                                            ).toFixed(3)
-                                        )
-
-                                        return (
-                                            <TokenBalance
-                                                key={balance.token.symbol}
-                                                token={balance.token}
-                                                quantity={amount}
-                                                price={price}
-                                                className="grid grid-cols-3 gap-4 px-2 py-0.5 rounded-sm hover:bg-muted/50 transition-colors"
-                                            />
-                                        )
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {!isLoading && !error && formattedBalances.length === 0 && (
-                        <div className="text-sm text-muted-foreground">No token balances found</div>
-                    )}
+                                    quantity={amount}
+                                    price={price}
+                                    showPrice
+                                    compact={compact}
+                                    canHide={true}
+                                    onHide={() => toggleHideToken(balance.token.symbol)}
+                                    isHidden={isHidden}
+                                    showHiddenTokens={showHiddenTokens}
+                                    chainType={account.chain}
+                                />
+                            )
+                        })}
+                    </div>
                 </div>
             )}
         </BaseCard>

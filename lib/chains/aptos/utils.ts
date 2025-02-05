@@ -79,6 +79,7 @@ export async function fetchAptosAccountResources(
     try {
         const resources = await makeRpcRequest<AptosResource[]>(`/accounts/${publicKey}/resources`)
         const balances: TokenBalance[] = []
+        let hasNativeApt = false
 
         // Process resources to extract token balances
         for (const resource of resources) {
@@ -96,6 +97,16 @@ export async function fetchAptosAccountResources(
 
                     const amount = resource.data.coin?.value
                     if (!amount || isNaN(Number(amount))) continue
+
+                    // Skip if we already have native APT and this is another APT variant
+                    if (tokenInfo.symbol === 'APT') {
+                        if (hasNativeApt) continue
+                        if (tokenType === '0x1::aptos_coin::AptosCoin') {
+                            hasNativeApt = true
+                        } else {
+                            continue
+                        }
+                    }
 
                     balances.push({
                         token: {

@@ -4,6 +4,7 @@ export interface SuiToken {
     decimals: number
     tokenAddress: string
     chainId?: number
+    isNative?: boolean
 }
 
 export interface TokenBalance {

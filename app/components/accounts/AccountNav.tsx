@@ -8,6 +8,7 @@ import {
     ChevronDown,
     ChevronUp,
     CreditCard,
+    Eye,
 } from 'lucide-react'
 import {
     Tooltip,
@@ -35,6 +36,8 @@ interface AccountNavProps {
     onExpandAll?: (expanded: boolean) => void
     hideCards?: boolean
     onHideCardsChange?: (checked: boolean) => void
+    showHiddenTokens?: boolean
+    onHiddenTokensChange?: (checked: boolean) => void
 }
 
 const FILTER_OPTIONS = [
@@ -177,6 +180,8 @@ function AccountNavComponent({
     onExpandAll,
     hideCards = false,
     onHideCardsChange,
+    showHiddenTokens = false,
+    onHiddenTokensChange,
     onSearch,
 }: AccountNavProps & { onSearch: (query: string) => void }) {
     const [isSearching, setIsSearching] = useState(false)
@@ -233,6 +238,14 @@ function AccountNavComponent({
                         }
                     />
                 )}
+
+                <ControlButton
+                    active={showHiddenTokens}
+                    onClick={() => onHiddenTokensChange?.(!showHiddenTokens)}
+                    icon={<Eye className="h-3.5 w-3.5" />}
+                    tooltip={showHiddenTokens ? 'Hide hidden tokens' : 'Show hidden tokens'}
+                    activeColor="green"
+                />
 
                 <ControlButton
                     active={!hideCards}

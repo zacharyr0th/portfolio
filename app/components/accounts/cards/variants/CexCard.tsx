@@ -5,6 +5,7 @@ import { BaseCard } from '../BaseCard'
 import { TokenBalance } from '../TokenBalance'
 import { exchangeHandlers, type SupportedExchange } from '@/lib/cex'
 import { logger } from '@/lib/utils/core/logger'
+import { useLocalStorage } from '@/lib/hooks/useLocalStorage'
 
 // Constants
 const REFRESH_INTERVAL = 5 * 60 * 1000 // 5 minutes
@@ -14,6 +15,7 @@ const MIN_REFRESH_INTERVAL = 60000 // 1 minute
 interface CexCardProps extends SharedCardProps {
     account: CexAccountWithPlatform
     onToggleExpand?: () => void
+    showHiddenTokens?: boolean
 }
 
 interface TokenBalanceData {
@@ -34,12 +36,40 @@ function CexCardComponent({
     compact = false,
     isExpanded = false,
     onUpdateValue,
+    showHiddenTokens = false,
 }: CexCardProps) {
     const [balances, setBalances] = useState<TokenBalanceData[]>([])
-    const [isLoading, setIsLoading] = useState(false)
+    const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [isOpen, setIsOpen] = useState(isExpanded)
     const [lastFetchTime, setLastFetchTime] = useState(0)
+    
+    // Add hidden tokens state
+    const [hiddenTokens, setHiddenTokens] = useLocalStorage<Record<string, string[]>>(
+        'hidden-tokens',
+        {}
+    )
+
+    const toggleHideToken = useCallback((symbol: string) => {
+        setHiddenTokens((prev: Record<string, string[]>) => {
+            const accountHidden = prev[account.id] || []
+            const isHidden = accountHidden.includes(symbol)
+            
+            if (isHidden) {
+                // Remove from hidden list
+                return {
+                    ...prev,
+                    [account.id]: accountHidden.filter((s: string) => s !== symbol)
+                }
+            } else {
+                // Add to hidden list
+                return {
+                    ...prev,
+                    [account.id]: [...accountHidden, symbol]
+                }
+            }
+        })
+    }, [account.id, setHiddenTokens])
 
     useEffect(() => {
         setIsOpen(isExpanded)
@@ -54,6 +84,7 @@ function CexCardComponent({
     const fetchBalances = useCallback(async () => {
         if (!handler) {
             logger.warn(`Handler not found for ${account.platform}`)
+            setError(`Unsupported exchange: ${account.platform}`)
             return
         }
 
@@ -68,6 +99,7 @@ function CexCardComponent({
         const cached = balanceCache.get(account.id)
         if (cached && now - cached.timestamp < MIN_REFRESH_INTERVAL) {
             setBalances(cached.data)
+            setIsLoading(false)
             return
         }
 
@@ -85,22 +117,38 @@ function CexCardComponent({
 
             clearTimeout(timeoutId)
 
-            const processedBalances = balancesResult.balances
-                .map(balance => {
-                    const price = prices[balance.token.symbol]?.price || 0
-                    const balanceNum = parseFloat(balance.balance)
-                    const usdValue = balanceNum * price
+            // Create a map to deduplicate tokens by symbol
+            const tokenMap = new Map<string, TokenBalanceData>()
 
-                    return {
+            balancesResult.balances.forEach(balance => {
+                const symbol = balance.token.symbol
+                const price = prices[symbol]?.price || 0
+                const balanceNum = parseFloat(balance.balance)
+                const usdValue = balanceNum * price
+
+                const existingBalance = tokenMap.get(symbol)
+                if (!existingBalance) {
+                    tokenMap.set(symbol, {
                         token: balance.token,
                         balance: balance.balance,
                         usdValue,
-                    }
+                    })
+                    return
+                }
+
+                // If we already have this token, sum the balances
+                const newBalance = (parseFloat(existingBalance.balance) + balanceNum).toString()
+                const totalUsdValue = parseFloat(newBalance) * price
+                tokenMap.set(symbol, {
+                    token: balance.token,
+                    balance: newBalance,
+                    usdValue: totalUsdValue,
                 })
-                // Only filter out dust amounts and zero balances
+            })
+
+            const processedBalances = Array.from(tokenMap.values())
                 .filter(b => {
                     const balanceNum = parseFloat(b.balance)
-                    // Keep if: non-zero balance AND (value >= $0.01 OR major token)
                     return (
                         balanceNum > 0 &&
                         (b.usdValue >= 0.01 ||
@@ -118,6 +166,7 @@ function CexCardComponent({
             setBalances(processedBalances)
             onUpdateValue?.(account.id, total)
             setLastFetchTime(now)
+            setError(null)
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Failed to fetch balances'
             logger.error(`Error fetching balances for ${account.id}: ${errorMessage}`)
@@ -134,40 +183,67 @@ function CexCardComponent({
         return () => clearInterval(intervalId)
     }, [fetchBalances])
 
+    const filteredBalances = useMemo(() => {
+        const accountHidden = hiddenTokens[account.id] || []
+        return balances
+            .filter(balance => {
+                // Show all tokens if showHiddenTokens is true
+                if (showHiddenTokens) return true
+                
+                // Otherwise filter out hidden tokens
+                return !accountHidden.includes(balance.token.symbol)
+            })
+            .sort((a, b) => b.usdValue - a.usdValue)
+    }, [balances, hiddenTokens, account.id, showHiddenTokens])
+
+    // Calculate total value based on filtered balances
+    const totalValue = useMemo(() => {
+        return filteredBalances.reduce((sum, balance) => sum + balance.usdValue, 0)
+    }, [filteredBalances])
+
+    useEffect(() => {
+        if (onUpdateValue) {
+            onUpdateValue(account.id, totalValue)
+        }
+    }, [account.id, totalValue, onUpdateValue])
+
+    const shouldUseCompactTokens = filteredBalances.length > 5
+
     return (
         <BaseCard
-            account={account}
+            account={{
+                ...account,
+                value: totalValue,
+            }}
             expanded={isOpen}
             onToggle={() => setIsOpen(!isOpen)}
-            className={isOpen ? 'h-auto' : undefined}
-            variant="detailed"
+            variant={compact ? 'compact' : 'detailed'}
+            isLoading={isLoading}
+            error={error}
+            lastUpdated={lastFetchTime}
         >
-            {!compact && isOpen && (
-                <div className="flex flex-col gap-2.5 pt-1">
-                    {isLoading && (
-                        <div className="text-sm text-muted-foreground animate-pulse">
-                            Loading balances...
-                        </div>
-                    )}
-                    {error && <div className="text-sm text-destructive">{error}</div>}
-                    {!isLoading && !error && (
-                        <div className="overflow-x-auto">
-                            <div className="flex flex-col gap-1">
-                                {balances.map(balance => {
-                                    const quantity = parseFloat(balance.balance)
-                                    const price = balance.usdValue / quantity
-                                    return (
-                                        <TokenBalance
-                                            key={`${account.id}-${balance.token.symbol}`}
-                                            token={balance.token}
-                                            quantity={Number(quantity.toFixed(3))}
-                                            price={Number(price.toFixed(3))}
-                                        />
-                                    )
-                                })}
-                            </div>
-                        </div>
-                    )}
+            {!compact && isOpen && !isLoading && !error && (
+                <div className="flex flex-col gap-1">
+                    {filteredBalances.map(balance => {
+                        const quantity = parseFloat(balance.balance)
+                        const price = balance.usdValue / quantity
+                        const accountHidden = hiddenTokens[account.id] || []
+                        const isHidden = accountHidden.includes(balance.token.symbol)
+                        return (
+                            <TokenBalance
+                                key={`${account.id}-${balance.token.symbol}`}
+                                token={balance.token}
+                                quantity={quantity}
+                                price={price}
+                                showPrice
+                                compact={shouldUseCompactTokens}
+                                canHide={true}
+                                onHide={() => toggleHideToken(balance.token.symbol)}
+                                isHidden={isHidden}
+                                showHiddenTokens={showHiddenTokens}
+                            />
+                        )
+                    })}
                 </div>
             )}
         </BaseCard>

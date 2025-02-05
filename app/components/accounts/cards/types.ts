@@ -291,3 +291,11 @@ export interface DebitCardProps extends SharedCardProps {
 // Export constants with proper readonly types
 export const SUPPORTED_CHAINS: readonly ChainType[] = CHAINS
 export const SUPPORTED_PLATFORMS: readonly PlatformType[] = PLATFORMS
+
+export interface AccountCardProps {
+    account: Account
+    compact?: boolean
+    isExpanded?: boolean
+    onUpdateValue?: (id: string, value: number) => void
+    showHiddenTokens?: boolean
+}

@@ -21,6 +21,7 @@ interface FilterState {
     showColdStorage: boolean
     showArchived: boolean
     hideCards: boolean
+    showHiddenTokens: boolean
     search: string
 }
 
@@ -32,6 +33,7 @@ function useAccountFilters(initialShowArchived: boolean = false) {
         showColdStorage: false,
         showArchived: initialShowArchived,
         hideCards: true,
+        showHiddenTokens: false,
         search: '',
     })
 
@@ -59,6 +61,10 @@ function useAccountFilters(initialShowArchived: boolean = false) {
             [setFilter]
         ),
         setHideCards: useCallback((value: boolean) => setFilter('hideCards', value), [setFilter]),
+        setShowHiddenTokens: useCallback(
+            (value: boolean) => setFilter('showHiddenTokens', value),
+            [setFilter]
+        ),
         setSearch: useCallback((value: string) => setFilter('search', value), [setFilter]),
     }
 }
@@ -90,6 +96,7 @@ export function AccountList({
         setShowColdStorage,
         setShowArchived,
         setHideCards,
+        setShowHiddenTokens,
         setSearch,
     } = useAccountFilters(showArchived)
 
@@ -181,6 +188,8 @@ export function AccountList({
                 onExpandAll={allowExpandAll ? setExpandedState : undefined}
                 hideCards={filters.hideCards}
                 onHideCardsChange={setHideCards}
+                showHiddenTokens={filters.showHiddenTokens}
+                onHiddenTokensChange={setShowHiddenTokens}
                 onSearch={handleSearch}
             />
 
@@ -192,6 +201,7 @@ export function AccountList({
                         compact={variant === 'compact'}
                         isExpanded={allowExpandAll ? expandedState : undefined}
                         onUpdateValue={handleAccountValueUpdate}
+                        showHiddenTokens={filters.showHiddenTokens}
                     />
                 ))}
             </div>

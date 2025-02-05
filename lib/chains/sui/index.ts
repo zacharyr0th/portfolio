@@ -116,6 +116,7 @@ const suiHandlerInstance = new BaseChainHandler({
                     try {
                         // Get token info from mapping or fetch metadata
                         let tokenInfo = TOKEN_SYMBOL_MAP[balance.coinType]
+                        const isNativeSui = balance.coinType === HANDLER_CONSTANTS.DEFAULT_COIN_TYPE
 
                         if (!tokenInfo) {
                             logger.debug(`Fetching metadata for unknown token: ${balance.coinType}`)
@@ -138,6 +139,15 @@ const suiHandlerInstance = new BaseChainHandler({
                             }
                         }
 
+                        // Calculate token value
+                        const value = Number(balance.totalBalance) / Math.pow(10, tokenInfo.decimals)
+                        
+                        // Skip dust amounts
+                        const minValue = isNativeSui ? 0.000001 : 0.01
+                        if (value < minValue) {
+                            return null
+                        }
+
                         return {
                             token: {
                                 symbol: tokenInfo.symbol,
@@ -145,6 +155,7 @@ const suiHandlerInstance = new BaseChainHandler({
                                 decimals: tokenInfo.decimals,
                                 tokenAddress: balance.coinType,
                                 chainId: 1, // Sui mainnet
+                                isNative: isNativeSui,
                             },
                             balance: balance.totalBalance,
                         } as TokenBalance
@@ -159,10 +170,15 @@ const suiHandlerInstance = new BaseChainHandler({
                 })
             )
 
-            // Filter out null values and sort by balance value
+            // Filter out null values and sort by balance value, putting native SUI first
             const tokenBalances = processedBalances
                 .filter((b): b is NonNullable<typeof b> => b !== null)
                 .sort((a, b) => {
+                    // Always put native SUI first
+                    if (a.token.tokenAddress === HANDLER_CONSTANTS.DEFAULT_COIN_TYPE) return -1
+                    if (b.token.tokenAddress === HANDLER_CONSTANTS.DEFAULT_COIN_TYPE) return 1
+
+                    // Then sort by value
                     const aValue = Number(a.balance) / Math.pow(10, a.token.decimals)
                     const bValue = Number(b.balance) / Math.pow(10, b.token.decimals)
                     return bValue - aValue
