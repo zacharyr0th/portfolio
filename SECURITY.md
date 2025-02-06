@@ -29,6 +29,7 @@ This project uses environment variables for configuration. Never commit actual A
 The following environment variables are required to run the application. Copy these to your `.env.local` file and fill in the appropriate values.
 
 ### Core Configuration
+
 ```bash
 # Base URLs for API and frontend
 API_URL=http://localhost:3000/api     # Your API endpoint
@@ -39,6 +40,7 @@ DEFAULT_CHAIN=aptos                   # Options: aptos, solana, sui, base
 ```
 
 ### Blockchain RPC Endpoints
+
 ```bash
 # Mainnet RPC URLs - Get these from your preferred RPC provider
 SOLANA_RPC_URL=https://api.mainnet-beta.solana.com     # Example: Helius, QuickNode
@@ -47,6 +49,7 @@ SUI_RPC_URL=https://fullnode.mainnet.sui.io            # Sui Foundation endpoint
 ```
 
 ### Market Data APIs
+
 ```bash
 # Price feed and market data credentials
 FINNHUB_API_KEY=                      # Get from https://finnhub.io
@@ -54,6 +57,7 @@ CMC_API_KEY=                         # Get from https://coinmarketcap.com/api
 ```
 
 ### Exchange Integration (Optional)
+
 ```bash
 # Kraken Exchange API credentials
 KRAKEN_API_KEY=                      # Get from Kraken exchange
@@ -70,6 +74,7 @@ COINBASE_API_SECRET=                 # Get from Coinbase
 ```
 
 ### Banking Integration (Optional)
+
 ```bash
 # Plaid API credentials
 PLAID_ENV=sandbox                    # Options: sandbox, development, production
@@ -102,4 +107,4 @@ When contributing to this project:
 2. Use placeholder values in examples
 3. Follow secure coding practices
 4. Report security issues privately
-5. Keep dependencies updated 
+5. Keep dependencies updated

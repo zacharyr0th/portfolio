@@ -5,6 +5,7 @@ This guide provides step-by-step instructions for adding new blockchain network 
 ## Directory Structure
 
 Each chain integration must follow this structure:
+
 ```
 lib/chains/
 ├── [chain]/                # Chain-specific directory (e.g., solana, aptos, sui)
@@ -21,27 +22,29 @@ lib/chains/
 ## Implementation Requirements
 
 #### types.ts
+
 ```typescript
 // Define chain-specific types
 export interface TokenBalance {
-    mint: string;          // Token address/mint
-    symbol: string;        // Token symbol
-    name: string;          // Token name
-    decimals: number;      // Token decimals
-    balance: string;       // Raw balance
-    uiBalance: number;     // Formatted balance
-    logoURI?: string;      // Optional token logo
+  mint: string; // Token address/mint
+  symbol: string; // Token symbol
+  name: string; // Token name
+  decimals: number; // Token decimals
+  balance: string; // Raw balance
+  uiBalance: number; // Formatted balance
+  logoURI?: string; // Optional token logo
 }
 
 export interface TokenPrice {
-    price: number;
-    priceChange24h: number;
+  price: number;
+  priceChange24h: number;
 }
 
 // Add any other chain-specific types
 ```
 
 #### index.ts
+
 ```typescript
 import { ChainHandler, TokenBalance, TokenPrice } from '../types';
 import { Cache, CACHE_TTL, CACHE_STALE_TIME } from '../baseHandler';
@@ -56,17 +59,17 @@ export const chainHandler: ChainHandler = {
         // Implement balance fetching with caching
         // Use error handling and retries
     },
-    
+
     fetchPrices: async () => {
         // Implement price fetching with caching
     },
-    
+
     getExplorerUrl: (publicKey: string, accountId: string) => {
         // Return block explorer URL
     },
-    
+
     BalanceDisplay: // Implement display component
-    
+
     clearCache: () => {
         balanceCache.clear();
         priceCache.clear();
@@ -77,34 +80,36 @@ export const chainHandler: ChainHandler = {
 ## API Route Implementation
 
 Create `app/api/[chain]/route.ts`:
+
 ```typescript
-import { NextResponse } from 'next/server';
-import { validatePublicKey, handleRateLimit } from '@/lib/utils';
+import { NextResponse } from "next/server";
+import { validatePublicKey, handleRateLimit } from "@/lib/utils";
 
 export async function POST(req: Request) {
-    try {
-        // Validate request and public key
-        // Implement rate limiting
-        // Handle chain RPC calls
-        // Return formatted response
-    } catch (error) {
-        // Error handling
-    }
+  try {
+    // Validate request and public key
+    // Implement rate limiting
+    // Handle chain RPC calls
+    // Return formatted response
+  } catch (error) {
+    // Error handling
+  }
 }
 ```
 
 ## Configuration
 
 Update `lib/chains/config.ts`:
+
 ```typescript
 export const CHAIN_CONFIG = {
-    [chain]: {
-        name: 'Chain Name',
-        rpcEndpoint: process.env.CHAIN_RPC_ENDPOINT,
-        explorerUrl: 'https://explorer...',
-        tokenListUrl: 'https://token-list...',
-    }
-}
+  [chain]: {
+    name: "Chain Name",
+    rpcEndpoint: process.env.CHAIN_RPC_ENDPOINT,
+    explorerUrl: "https://explorer...",
+    tokenListUrl: "https://token-list...",
+  },
+};
 ```
 
 ## Implementation Checklist
@@ -123,6 +128,7 @@ export const CHAIN_CONFIG = {
 ## Example Implementations
 
 See these complete implementations for reference:
+
 - `solana/` - Complete implementation with SPL token support
 - `aptos/` - Move-based chain example
-- `sui/` - Alternative Move-based implementation 
+- `sui/` - Alternative Move-based implementation

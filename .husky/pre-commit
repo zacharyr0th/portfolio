@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run lint-staged for code formatting and linting
+npm run lint-staged
+
+# Run security checks
+node scripts/check-security.js 

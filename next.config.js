@@ -15,10 +15,12 @@ process.emit = function (name, data, ...args) {
 };
 
 const nextConfig = {
-  // Optimize for production performance
+  // Core configuration
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
+  swcMinify: true,
+  productionBrowserSourceMaps: false,
 
   // Environment Variables Configuration
   env: {
@@ -41,6 +43,8 @@ const nextConfig = {
     domains: ['cdn.simplehash.com'], // Add domains you'll use for images
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
     imageSizes: [16, 32, 48, 64, 96, 128, 256],
+    formats: ['image/webp'],
+    minimumCacheTTL: 60,
   },
 
   // Webpack optimizations
@@ -51,6 +55,11 @@ const nextConfig = {
       config.optimization = {
         ...config.optimization,
         usedExports: true,
+        sideEffects: true,
+        minimize: true,
+        moduleIds: 'deterministic',
+        chunkIds: 'deterministic',
+        mangleExports: true,
       };
     }
 
@@ -118,7 +127,7 @@ const nextConfig = {
     ];
   },
 
-  // Experimental features
+  // Stable features only
   experimental: {
     serverActions: {
       bodySizeLimit: "2mb",

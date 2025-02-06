@@ -13,12 +13,14 @@ We follow a modified Git Flow workflow with the following branches:
 ## Development Workflow
 
 1. **Fork & Clone**
+
    ```bash
    git clone https://github.com/yourusername/portfolio.git
    cd portfolio
    ```
 
 2. **Branch Creation**
+
    - For new features:
      ```bash
      git checkout -b feature/your-feature-name dev
@@ -33,6 +35,7 @@ We follow a modified Git Flow workflow with the following branches:
      ```
 
 3. **Staying Updated**
+
    ```bash
    git remote add upstream https://github.com/zacharyr0th/portfolio.git
    git fetch upstream
@@ -44,7 +47,7 @@ We follow a modified Git Flow workflow with the following branches:
    - Create a Pull Request to merge into `dev`
    - Fill out the PR template completely
 
-## Branch Naming 
+## Branch Naming
 
 - Features: `feature/descriptive-name`
 - Bug fixes: `fix/bug-description`
@@ -55,11 +58,13 @@ We follow a modified Git Flow workflow with the following branches:
 ## Commit Messages
 
 Follow these guidelines for commit messages:
+
 - Keep the first line under 72 characters
 - Use present tense ("add feature" not "added feature")
 - Reference issues and pull requests when relevant
 
 Examples:
+
 ```
 feat: add Binance chain integration
 fix: correct Solana balance calculation
@@ -71,28 +76,33 @@ test: add unit tests for Kraken API
 
 1. All changes require at least one review
 2. Address any review comments before merging
-4. Maintain a clean commit history
-5. Squash commits if requested
+3. Maintain a clean commit history
+4. Squash commits if requested
 
 ## Integration Guidelines
 
 When adding new integrations, we have detailed guides for each type:
 
 ### Blockchain Integration
+
 For adding new blockchain support, follow the [Blockchain Integration Guide](lib/chains/README.md). This guide covers:
+
 - Directory structure and required files
 - RPC integration requirements
 - Token management and price feeds
 - Error handling and caching strategies
 
 ### Exchange Integration
+
 For adding new exchange support, follow the [CEX Integration Guide](lib/cex/README.md). This guide covers:
+
 - Directory structure and required files
 - API integration and authentication
 - Balance and order tracking
 - Rate limiting and error handling
 
 Both guides include:
+
 - Step-by-step implementation instructions
 - Security best practices
 - Example implementations
