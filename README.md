@@ -124,3 +124,66 @@ When adding a new integration:
 1. Follow the appropriate guide ([Chains](lib/chains/README.md) or [CEX](lib/cex/README.md))
 2. Use existing implementations as references
 3. Ensure all checklist items are completed
+
+# Portfolio Management Tool
+
+A cross-platform portfolio management tool that integrates with various wallets, exchanges, and financial services.
+
+## Features
+
+- Multi-chain wallet support (Ethereum, Polygon, Arbitrum, Optimism, Base, Solana, Aptos, Sui)
+- Centralized exchange integration (Gemini, etc.)
+- Real-time balance tracking
+- Portfolio analytics and visualization
+- Secure API integration
+
+## Setup
+
+1. Clone the repository
+2. Install dependencies:
+```bash
+npm install
+```
+3. Copy `.env.example` to `.env.local` and configure your environment variables:
+```bash
+cp .env.example .env.local
+```
+
+### Gemini Integration
+
+To enable Gemini exchange integration:
+
+1. Create an API key on Gemini:
+   - Log in to your Gemini account
+   - Go to Account Settings > API
+   - Create a new API key with "Fund Management" permissions
+   - Copy the API key and secret
+
+2. Add your Gemini credentials to `.env.local`:
+```bash
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_API_SECRET=your_gemini_api_secret
+```
+
+The integration will automatically fetch your Gemini account balances and update them in real-time.
+
+## Development
+
+Run the development server:
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to view the application.
+
+## Security
+
+- API keys are stored securely in environment variables
+- All API requests are made server-side to protect credentials
+- Rate limiting and error handling are implemented for all API calls
+- Sensitive data is never exposed to the client
+
+## License
+
+MIT

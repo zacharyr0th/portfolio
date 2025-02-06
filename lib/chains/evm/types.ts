@@ -1,4 +1,4 @@
-import { BigNumber } from 'ethers'
+import type { BigNumber } from '@ethersproject/bignumber'
 
 export interface EvmTokenBalance {
     mint: string;          // Token contract address
@@ -30,7 +30,7 @@ export interface EvmChainConfig {
 }
 
 // Supported EVM chains
-export const EVM_CHAINS: Record<string, EvmChainConfig> = {
+export const EVM_CHAINS = {
     ethereum: {
         chainId: 1,
         name: 'Ethereum',
@@ -108,4 +108,4 @@ export const EVM_CHAINS: Record<string, EvmChainConfig> = {
             decimals: 18
         }
     }
-} 
+} as const satisfies Record<string, EvmChainConfig> 

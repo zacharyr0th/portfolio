@@ -74,15 +74,30 @@ export const ACCOUNT_TYPE_STYLES = {
 
 // Category descriptions for broker accounts
 export const CATEGORY_DESCRIPTIONS = {
-    Margin: 'Margin Trading Account',
-    Cash: 'Cash Trading Account',
-    RIRA: 'Roth IRA',
-    '401k': '401(k) Retirement',
-    HSA: 'Health Savings Account',
-    RSU: 'Restricted Stock Units',
-    RTU: 'Restricted Token Units',
-    Leverage: 'Leverage Trading Account',
+    wallet: 'Self-custodial blockchain wallet for managing digital assets',
+    cex: 'Centralized cryptocurrency exchange account',
+    broker: 'Traditional investment and trading account',
+    bank: 'Traditional banking and savings account',
+    credit: 'Credit card account for purchases and payments',
+    debit: 'Debit card linked to checking account',
 } as const
+
+// Priority order for debit platforms
+const DEBIT_PLATFORM_PRIORITY: Record<DebitPlatform, number> = {
+    Chase: 1,
+    'Wells Fargo': 2,
+    SoFi: 3,
+    Fidelity: 4,
+    Venmo: 5
+} as const
+
+export const getPrioritizedDebitAccounts = <T extends { platform: DebitPlatform }>(accounts: T[]): T[] => {
+    return [...accounts].sort((a, b) => {
+        const priorityA = DEBIT_PLATFORM_PRIORITY[a.platform] || Number.MAX_SAFE_INTEGER
+        const priorityB = DEBIT_PLATFORM_PRIORITY[b.platform] || Number.MAX_SAFE_INTEGER
+        return priorityA - priorityB
+    })
+}
 
 // Chain icons with improved type safety
 export const CHAIN_ICONS = {
@@ -90,20 +105,25 @@ export const CHAIN_ICONS = {
     solana: { src: '/icons/chain-icons/solana.webp', opacity: 90 },
     sui: { src: '/icons/chain-icons/sui.webp', opacity: 90 },
     ethereum: { src: '/icons/chain-icons/ethereum.webp', opacity: 90 },
+    'eth-main': { src: '/icons/chain-icons/ethereum.webp', opacity: 90 },
     polygon: { src: '/icons/chain-icons/polygon.webp', opacity: 90 },
+    'polygon-main': { src: '/icons/chain-icons/polygon.webp', opacity: 90 },
     arbitrum: { src: '/icons/chain-icons/arbitrum.webp', opacity: 90 },
+    'arbitrum-main': { src: '/icons/chain-icons/arbitrum.webp', opacity: 90 },
     optimism: { src: '/icons/chain-icons/optimism.webp', opacity: 90 },
+    'optimism-main': { src: '/icons/chain-icons/optimism.webp', opacity: 90 },
     base: { src: '/icons/chain-icons/base.webp', opacity: 90 },
+    'base-main': { src: '/icons/chain-icons/base.webp', opacity: 90 },
 } as const
 
 export const PLATFORM_ICONS: Readonly<Record<string, { src: string; opacity?: number }>> = {
     // CEX Platforms
-    Kraken: { src: '/icons/account-icons/kraken.webp', opacity: 90 },
-    Gemini: { src: '/icons/account-icons/gemini.webp', opacity: 90 },
-    Coinbase: { src: '/icons/account-icons/coinbase.webp', opacity: 90 },
+    Kraken: { src: '/icons/cex-icons/kraken.webp', opacity: 90 },
+    Gemini: { src: '/icons/cex-icons/gemini.webp', opacity: 90 },
+    Coinbase: { src: '/icons/unused-icons/coinbase.webp', opacity: 90 },
 
     // Broker Platforms
-    Fidelity: { src: '/icons/account-icons/placeholder.webp', opacity: 90 },
+    Fidelity: { src: '/icons/unused-icons/fidelity.webp', opacity: 90 },
     Schwab: { src: '/icons/account-icons/schwab.webp', opacity: 90 },
     Robinhood: { src: '/icons/account-icons/robinhood.webp', opacity: 90 },
     'E*TRADE': { src: '/icons/account-icons/etrade.webp', opacity: 90 },
@@ -112,20 +132,20 @@ export const PLATFORM_ICONS: Readonly<Record<string, { src: string; opacity?: nu
     Magna: { src: '/icons/account-icons/magna.webp', opacity: 90 },
 
     // Bank & Payment Platforms
-    Chase: { src: '/icons/account-icons/chase.webp', opacity: 90 },
+    Chase: { src: '/icons/unused-icons/chase.webp', opacity: 90 },
     SoFi: { src: '/icons/account-icons/sofi.webp', opacity: 90 },
-    Betterment: { src: '/icons/account-icons/placeholder.webp', opacity: 90 },
+    Betterment: { src: '/icons/unused-icons/betterment.webp', opacity: 90 },
     'TD Auto Finance': { src: '/icons/account-icons/td-auto-finance.webp', opacity: 90 },
-    Apple: { src: '/icons/account-icons/placeholder.webp', opacity: 90 },
+    Apple: { src: '/icons/unused-icons/apple.webp', opacity: 90 },
 } as const
 
 export const TOKEN_ICONS: Readonly<Record<string, { src: string; opacity?: number }>> = {
-    USDC: { src: '/icons/usdc.webp' },
-    USDT: { src: '/icons/usdt.webp' },
-    SOL: { src: '/icons/solana.webp' },
-    APT: { src: '/icons/aptos.webp' },
-    SUI: { src: '/icons/sui.webp' },
-    ETH: { src: '/icons/eth.webp' },
+    USDC: { src: '/icons/unused-icons/usdc.webp' },
+    USDT: { src: '/icons/unused-icons/usdt.webp' },
+    SOL: { src: '/icons/chain-icons/solana.webp' },
+    APT: { src: '/icons/chain-icons/aptos.webp' },
+    SUI: { src: '/icons/chain-icons/sui.webp' },
+    ETH: { src: '/icons/chain-icons/ethereum.webp' },
 } as const
 
 // Platform URLs for each account type with improved type safety
@@ -166,17 +186,11 @@ export const PLATFORM_URLS: Readonly<PlatformUrls> = {
     },
 } as const
 
-// Cache for formatters
-const formatters = new Map<string, Intl.DateTimeFormat>()
-
-// Cache for chain icons
-const chainIconCache = new Map<ChainType, { src: string; opacity: number }>()
-
-// Cache for platform icons
-const platformIconCache = new Map<string, { src: string; opacity?: number }>()
-
-// Cache for token icons
-const tokenIconCache = new Map<string, { src: string; opacity?: number }>()
+// Caches for memoized functions
+const formatters = new Map<string, Intl.DateTimeFormat>() // formatters
+const chainIconCache = new Map<ChainType, { src: string; opacity: number }>() // chain icons
+const platformIconCache = new Map<string, { src: string; opacity?: number }>() // platform icons
+const tokenIconCache = new Map<string, { src: string; opacity?: number }>() // token icons
 
 // Helper functions for UI components with memoization
 export const getChainIcon = (chain: ChainType) => {
@@ -185,7 +199,6 @@ export const getChainIcon = (chain: ChainType) => {
     }
     return chainIconCache.get(chain)
 }
-
 export const getPlatformIcon = (
     platform: BankPlatform | BrokerPlatform | CexPlatform | CreditPlatform | DebitPlatform
 ) => {
@@ -195,7 +208,6 @@ export const getPlatformIcon = (
     }
     return platformIconCache.get(platform) || icon
 }
-
 export const getTokenIcon = (symbol: string) => {
     const icon = TOKEN_ICONS[symbol]
     if (icon && !tokenIconCache.has(symbol)) {
@@ -203,7 +215,6 @@ export const getTokenIcon = (symbol: string) => {
     }
     return tokenIconCache.get(symbol) || icon
 }
-
 export const formatLastUpdated = (date: string | Date) => {
     const key = 'lastUpdated'
     if (!formatters.has(key)) {
@@ -221,8 +232,8 @@ export const formatLastUpdated = (date: string | Date) => {
 }
 
 // Wallet account utility functions with memoization
-const addressFormatCache = new Map<string, string>()
-
+const addressFormatCache = new Map<string, string>() // address format cache
+// Format address utility function with memoization
 export const formatAddress = (address: string, chain: ChainType): string => {
     const cacheKey = `${chain}-${address}`
     if (addressFormatCache.has(cacheKey)) {
@@ -249,17 +260,14 @@ export const formatAddress = (address: string, chain: ChainType): string => {
 
 // Cache for chain balance distribution
 const chainBalanceCache = new Map<string, WalletAccount[]>()
-
 export const distributeChainBalance = (
     wallets: WalletAccount[],
     chain: ChainType
 ): WalletAccount[] => {
     const cacheKey = `${chain}-${wallets.map(w => w.id).join('-')}`
-    
     if (chainBalanceCache.has(cacheKey)) {
         return chainBalanceCache.get(cacheKey)!
     }
-
     const result = wallets.filter(w => w.chain === chain && w.status === 'active')
     chainBalanceCache.set(cacheKey, result)
     return result
@@ -271,19 +279,7 @@ const prioritizedAccountsCache = {
     credit: null as Pick<CreditAccount, 'id' | 'name' | 'priority' | 'rewards'>[] | null
 }
 
-export const getPrioritizedDebitAccounts = (): Pick<DebitAccount, 'id' | 'name' | 'priority'>[] => {
-    if (!prioritizedAccountsCache.debit) {
-        prioritizedAccountsCache.debit = Object.values(debitAccounts as Record<string, DebitAccount>)
-            .sort((a, b) => ((a.priority || 99) - (b.priority || 99)))
-            .map(account => ({
-                id: account.id,
-                name: account.name,
-                priority: account.priority,
-            }))
-    }
-    return prioritizedAccountsCache.debit
-}
-
+// Get prioritized credit accounts with memoization
 export const getPrioritizedCreditAccounts = (): Pick<
     CreditAccount,
     'id' | 'name' | 'priority' | 'rewards'

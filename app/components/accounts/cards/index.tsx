@@ -32,8 +32,21 @@ interface AccountCardProps extends SharedCardProps {
 }
 
 function assertWalletChain(account: WalletAccount) {
-    return isValidChain(account.chain) ? { ...account, chain: account.chain as ChainType } : null
+    if (!isValidChain(account.chain)) return null
+    
+    // Map mainnet variants to base chain names
+    const chainMap: Record<string, WalletAccount['chain']> = {
+        'eth-main': 'ethereum',
+        'polygon-main': 'polygon',
+        'arbitrum-main': 'arbitrum',
+        'optimism-main': 'optimism',
+        'base-main': 'base',
+    }
+    
+    const normalizedChain = chainMap[account.chain] || account.chain
+    return { ...account, chain: normalizedChain }
 }
+
 function assertBankPlatform(account: BankAccount) {
     return { ...account, platform: account.platform as BankPlatform }
 }

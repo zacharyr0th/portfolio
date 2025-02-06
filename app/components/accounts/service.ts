@@ -106,9 +106,45 @@ export class AccountService {
             .map(broker => this.addDefaultFields(broker as BrokerAccount))
     }
 
-    static getCexAccounts(): CexAccount[] {
-        return Object.values(accountConfig.cex)
-            .map(cex => this.addDefaultFields(cex as CexAccount))
+    static async updateCexAccountValue(account: CexAccount): Promise<number> {
+        try {
+            if (account.platform === 'Gemini') {
+                const response = await this.fetchWithRetry('gemini-balance', () =>
+                    fetch('/api/exchanges/gemini/balance')
+                )
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch Gemini balance: ${response.statusText}`)
+                }
+
+                const data = await response.json()
+                return data.balance
+            }
+            
+            // Add other exchange balance fetching logic here
+            return account.value
+        } catch (error) {
+            logger.error(`Failed to update ${account.platform} balance:`, error)
+            return account.value
+        }
+    }
+
+    static async getCexAccounts(): Promise<CexAccount[]> {
+        return this.withCache('cex-accounts', async () => {
+            const accounts = Object.values(accountConfig.cex)
+                .map(cex => this.addDefaultFields(cex as CexAccount))
+
+            // Update balances for each CEX account
+            const updatedAccounts = await Promise.all(
+                accounts.map(async (account) => ({
+                    ...account,
+                    value: await this.updateCexAccountValue(account),
+                    lastUpdated: new Date().toISOString()
+                }))
+            )
+
+            return updatedAccounts
+        })
     }
 
     static getCreditAccounts(): Account[] {

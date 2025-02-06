@@ -169,26 +169,38 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         accounts: [
             ...AccountService.getBankAccounts(),
             ...AccountService.getBrokerAccounts(),
-            ...AccountService.getCexAccounts(),
             ...AccountService.getCreditAccounts(),
         ],
     })
 
+    // Initialize async accounts (CEX and Wallets)
     useEffect(() => {
-        const initializeWalletAccounts = async () => {
+        const initializeAsyncAccounts = async () => {
             try {
                 dispatch({ type: 'SET_LOADING', payload: true })
-                const wallets = await AccountService.getWalletAccounts()
-                const nonWalletAccounts = state.accounts.filter(acc => acc.type !== 'wallet')
+                
+                // Load both CEX and wallet accounts in parallel
+                const [cexAccounts, walletAccounts] = await Promise.all([
+                    AccountService.getCexAccounts(),
+                    AccountService.getWalletAccounts()
+                ])
+
+                // Get all non-async accounts (bank, broker, credit)
+                const baseAccounts = state.accounts.filter(acc => 
+                    acc.type !== 'cex' && acc.type !== 'wallet'
+                )
+
+                // Combine all accounts
                 dispatch({
                     type: 'SET_DATA',
                     payload: {
-                        accounts: [...wallets, ...nonWalletAccounts],
+                        accounts: [...baseAccounts, ...cexAccounts, ...walletAccounts],
+                        lastUpdated: new Date().toISOString(),
                     },
                 })
             } catch (error) {
-                const err = error instanceof Error ? error : createError('Failed to load wallet accounts')
-                logger.error('Failed to initialize wallet accounts:', err)
+                const err = error instanceof Error ? error : createError('Failed to load accounts')
+                logger.error('Failed to initialize accounts:', err)
                 dispatch({
                     type: 'SET_ERROR',
                     payload: err,
@@ -198,7 +210,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
             }
         }
 
-        initializeWalletAccounts()
+        initializeAsyncAccounts()
     }, [])
 
     const handleAccountValueUpdate = useCallback((id: string, value: number) => {
@@ -263,6 +275,10 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
             aptos: 'https://explorer.aptoslabs.com/account/',
             solana: 'https://solscan.io/account/',
             sui: 'https://suiexplorer.com/address/',
+            ethereum: 'https://etherscan.io/address/',
+            polygon: 'https://polygonscan.com/address/',
+            arbitrum: 'https://arbiscan.io/address/',
+            optimism: 'https://optimistic.etherscan.io/address/',
             base: 'https://basescan.org/address/',
         }
 

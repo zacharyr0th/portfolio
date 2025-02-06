@@ -56,15 +56,10 @@ export const CHAINS = [
     'solana', 
     'sui',
     'ethereum',
-    'eth-main',
     'polygon',
-    'polygon-main',
     'arbitrum',
-    'arbitrum-main',
     'optimism',
-    'optimism-main',
-    'base',
-    'base-main'
+    'base'
 ] as const
 export type ChainType = (typeof CHAINS)[number]
 

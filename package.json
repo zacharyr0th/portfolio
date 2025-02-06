@@ -18,6 +18,7 @@
         "reset": "npm run clean && npm cache clean --force && npm install"
     },
     "dependencies": {
+        "@ethersproject/bignumber": "^5.7.0",
         "@hookform/resolvers": "^3.3.4",
         "@radix-ui/react-accordion": "^1.1.2",
         "@radix-ui/react-alert-dialog": "^1.0.5",
@@ -58,7 +59,7 @@
         "decimal.js-light": "^2.5.1",
         "dotenv": "^16.4.7",
         "embla-carousel-react": "^8.0.0",
-        "ethers": "^5.7.2",
+        "ethers": "^6.13.5",
         "input-otp": "^1.0.1",
         "jsonwebtoken": "^9.0.2",
         "kraken-api": "^1.0.2",

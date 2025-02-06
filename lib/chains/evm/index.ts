@@ -2,7 +2,6 @@ import { ethers } from 'ethers';
 import { ChainHandler, ChainTokenBalance, ChainTokenPrice } from '../types';
 import { BaseChainHandler, BaseHandlerConfig } from '../baseHandler';
 import { EVM_CHAINS } from './types';
-import { formatUnits } from 'ethers/lib/utils';
 import { TokenBalance } from './TokenBalance';
 import { logger } from '@/lib/utils/core/logger';
 
@@ -36,7 +35,7 @@ const evmHandlerInstance = new BaseChainHandler({
     chainName: 'evm',
     fetchBalancesImpl: async (publicKey: string, accountId: string) => {
         // Normalize chain name by removing -main suffix and handling eth alias
-        const chainName = accountId.split('-')[0].replace('eth', 'ethereum')
+        const chainName = accountId?.split('-')?.[0]?.replace('eth', 'ethereum') || 'ethereum'
         const chainConfig = EVM_CHAINS[chainName as keyof typeof EVM_CHAINS]
         
         if (!chainConfig) {
@@ -70,10 +69,10 @@ const evmHandlerInstance = new BaseChainHandler({
         return {}
     },
     getExplorerUrlImpl: (publicKey: string, accountId: string) => {
-        const chainName = accountId.split('-')[0].replace('eth', 'ethereum');
+        const chainName = accountId?.split('-')?.[0]?.replace('eth', 'ethereum') || 'ethereum';
         const chainConfig = EVM_CHAINS[chainName as keyof typeof EVM_CHAINS];
         if (!chainConfig) throw new Error(`Unsupported chain: ${chainName}`);
-        return `${chainConfig?.explorerUrl || ''}/address/${publicKey}`;
+        return `${chainConfig.explorerUrl}/address/${publicKey}`;
     },
     BalanceDisplayComponent: TokenBalance,
 });

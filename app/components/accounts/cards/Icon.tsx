@@ -95,7 +95,8 @@ export const Icon = memo(function IconComponent({
                     height={20}
                     className={cn(
                         'w-full h-auto',
-                        src.includes('chain-icons') ? 'brightness-0 invert' : '',
+                        src.includes('chain-icons') ? 'dark:invert dark:brightness-0' : '',
+                        src.includes('kraken.webp') ? 'brightness-0 invert' : '',
                         opacity !== 100 && `opacity-${opacity}`
                     )}
                     priority={false}

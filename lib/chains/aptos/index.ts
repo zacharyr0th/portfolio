@@ -11,7 +11,7 @@ import { TOKEN_SYMBOL_MAP, DEFAULT_PRICE, SPAM_PATTERNS } from './constants'
 // Create Aptos handler instance
 const aptosHandlerInstance = new BaseChainHandler({
     chainName: 'aptos',
-    fetchBalancesImpl: async (publicKey: string) => {
+    fetchBalancesImpl: async (publicKey: string, accountId: string) => {
         if (!publicKey?.trim()) {
             logger.warn('No public key provided for Aptos balance fetch')
             return { balances: [] }
@@ -78,7 +78,10 @@ const aptosHandlerInstance = new BaseChainHandler({
                     )
                     return false
                 }
-            })
+            }).map(balance => ({
+                ...balance,
+                uiAmount: Number(balance.balance) / Math.pow(10, balance.token.decimals)
+            }))
 
             logger.debug(`Found ${validBalances.length} valid Aptos token balances`)
             return { balances: validBalances }
