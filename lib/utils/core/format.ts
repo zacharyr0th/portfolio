@@ -55,6 +55,70 @@ function getDateFormat(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat
     return formatter
 }
 
+/**
+ * Format a number with appropriate decimal places and commas
+ * @param value The number to format
+ * @param decimals Optional number of decimal places (default: 4 for small numbers, 2 for larger numbers)
+ * @param options Additional formatting options
+ * @returns Formatted string
+ */
+export function formatNumber(
+    value: number,
+    decimals?: number,
+    options: {
+        compact?: boolean
+        currency?: boolean
+        signed?: boolean
+        threshold?: number
+    } = {}
+): string {
+    const {
+        compact = false,
+        currency = false,
+        signed = false,
+        threshold = 1
+    } = options
+
+    // Handle invalid input
+    if (typeof value !== 'number' || !isFinite(value)) {
+        return '0'
+    }
+
+    // Determine decimal places based on number size if not specified
+    if (typeof decimals !== 'number') {
+        decimals = Math.abs(value) < threshold ? 4 : 2
+    }
+
+    const formatterOptions: Intl.NumberFormatOptions = {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+        notation: compact ? 'compact' : 'standard',
+        style: currency ? 'currency' : 'decimal',
+        currency: currency ? 'USD' : undefined,
+        signDisplay: signed ? 'always' : 'auto'
+    }
+
+    return getNumberFormat(formatterOptions).format(value)
+}
+
+/**
+ * Format a number as a percentage
+ * @param value The number to format as percentage
+ * @param decimals Number of decimal places
+ * @returns Formatted percentage string
+ */
+export function formatPercent(value: number, decimals: number = 2): string {
+    if (typeof value !== 'number' || !isFinite(value)) {
+        return '0%'
+    }
+
+    return getNumberFormat({
+        style: 'percent',
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    }).format(value)
+}
+
 // Optimized currency formatting with predefined options
 const currencyFormatOptions = {
     compact: {
@@ -71,6 +135,9 @@ const currencyFormatOptions = {
     },
 } as const
 
+/**
+ * Format a currency value with smart decimals
+ */
 export function formatCurrency(value: number, showDecimals: boolean = true): string {
     if (value === 0) return '$0'
 
@@ -98,6 +165,20 @@ export function formatCurrency(value: number, showDecimals: boolean = true): str
     }
 
     return getNumberFormat(options).format(value)
+}
+
+/**
+ * Format a compact number (e.g., 1.2K, 1.2M)
+ */
+export function formatCompact(value: number, decimals: number = 1): string {
+    return formatNumber(value, decimals, { compact: true })
+}
+
+/**
+ * Format a signed number (always shows + or -)
+ */
+export function formatSigned(value: number, decimals: number = 2): string {
+    return formatNumber(value, decimals, { signed: true })
 }
 
 // Predefined date format options

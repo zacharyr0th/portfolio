@@ -9,11 +9,11 @@ import {
     getChainInfo,
     type ChainTokenBalance,
     type ChainTokenPrice,
-    type ChainType,
 } from '@/lib/chains'
-import type { WalletAccount } from '../types'
+import type { WalletAccount, ChainType } from '../types'
 import { logger } from '@/lib/utils/core/logger'
 import { useLocalStorage } from '@/lib/utils/hooks/useLocalStorage'
+import { EVM_CHAINS } from '@/lib/chains/evm/types'
 
 // Constants
 const COPY_TIMEOUT_MS = 2000
@@ -24,22 +24,35 @@ const MIN_REFRESH_INTERVAL = 60000
 const MAX_REFRESH_INTERVAL = 300000
 const CACHE_DURATION = 300000
 
-// Cache for wallet data
-const walletCache = new Map<
-    string,
-    {
-        balances: ChainTokenBalance[]
-        prices: Record<string, ChainTokenPrice>
-        timestamp: number
-        error?: string
-    }
->()
+// Optimize cache implementation with LRU cache
+const walletCache = new Map<string, {
+    balances: ChainTokenBalance[]
+    prices: Record<string, ChainTokenPrice>
+    timestamp: number
+    error?: string
+}>()
 
-// Debounced fetch function to prevent multiple simultaneous requests
-const debouncedFetches = new Map<string, NodeJS.Timeout>()
+// Add cache size limit
+const MAX_CACHE_ENTRIES = 100
+
+// Cache cleanup function
+const cleanupCache = () => {
+    if (walletCache.size > MAX_CACHE_ENTRIES) {
+        const entries = Array.from(walletCache.entries())
+        entries.sort((a, b) => a[1].timestamp - b[1].timestamp)
+        const toDelete = entries.slice(0, entries.length - MAX_CACHE_ENTRIES)
+        toDelete.forEach(([key]) => walletCache.delete(key))
+    }
+}
+
+// Optimize debounce implementation
+const debouncedFetches = new Map<string, {
+    timeoutId: NodeJS.Timeout
+    controller: AbortController
+}>()
 
 interface WalletCardProps {
-    account: Omit<WalletAccount, 'chain'> & { chain: ChainType }
+    account: WalletAccount
     compact?: boolean
     isExpanded?: boolean
     onUpdateValue?: (id: string, value: number) => void
@@ -73,19 +86,25 @@ function WalletCardComponent({
         {}
     )
 
+    // Handle expanded state changes
+    useEffect(() => {
+        setIsOpen(isExpanded)
+    }, [isExpanded])
+
+    // Add request deduplication
+    const pendingRequests = useRef(new Set<string>())
+
     const toggleHideToken = useCallback((symbol: string) => {
         setHiddenTokens((prev: Record<string, string[]>) => {
             const walletHidden = prev[account.id] || []
             const isHidden = walletHidden.includes(symbol)
             
             if (isHidden) {
-                // Remove from hidden list
                 return {
                     ...prev,
                     [account.id]: walletHidden.filter((s: string) => s !== symbol)
                 }
             } else {
-                // Add to hidden list
                 return {
                     ...prev,
                     [account.id]: [...walletHidden, symbol]
@@ -93,10 +112,6 @@ function WalletCardComponent({
             }
         })
     }, [account.id, setHiddenTokens])
-
-    useEffect(() => {
-        setIsOpen(isExpanded)
-    }, [isExpanded])
 
     const chainHandler = useMemo(() => {
         logger.debug(`Initializing chain handler for ${account.chain} wallet: ${account.id}`)
@@ -129,8 +144,14 @@ function WalletCardComponent({
             }
 
             const now = Date.now()
-            
-            // Enhanced cache check with shorter duration for empty balances
+            const requestId = `${account.id}-${now}`
+
+            // Check for duplicate requests
+            if (pendingRequests.current.has(requestId)) {
+                return
+            }
+
+            // Enhanced cache check
             const cached = walletCache.get(account.id)
             if (cached) {
                 const cacheAge = now - cached.timestamp
@@ -139,6 +160,7 @@ function WalletCardComponent({
                 const effectiveMinRefresh = (hasBalances && hasPrices) ? 
                     MIN_REFRESH_INTERVAL : 
                     MIN_REFRESH_INTERVAL / 2
+
                 if (cacheAge < effectiveMinRefresh) {
                     setTokenData({ balances: cached.balances, prices: cached.prices })
                     setError(cached.error || null)
@@ -147,31 +169,31 @@ function WalletCardComponent({
                 }
             }
 
-            // Debounce check
-            const existingTimeout = debouncedFetches.get(account.id)
-            if (existingTimeout) {
-                clearTimeout(existingTimeout)
+            // Cancel existing requests
+            const existing = debouncedFetches.get(account.id)
+            if (existing) {
+                clearTimeout(existing.timeoutId)
+                existing.controller.abort()
             }
 
-            // Set new debounced fetch
+            // Create new abort controller
+            const controller = new AbortController()
+            
             const timeoutId = setTimeout(async () => {
-                setIsLoading(true)
-                setError(null)
-
                 try {
-                    // Cancel any existing requests
-                    if (abortControllerRef.current) {
-                        abortControllerRef.current.abort()
-                    }
+                    pendingRequests.current.add(requestId)
+                    setIsLoading(true)
+                    setError(null)
 
-                    abortControllerRef.current = new AbortController()
-                    const fetchTimeoutId = setTimeout(
-                        () => abortControllerRef.current?.abort(),
-                        REQUEST_TIMEOUT
-                    )
+                    // Fetch data with timeout
+                    const fetchPromise = Promise.race([
+                        chainHandler.fetchBalances(account.publicKey, account.id),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Request timeout')), REQUEST_TIMEOUT)
+                        )
+                    ])
 
-                    // Fetch balances
-                    const balancesResult = await chainHandler.fetchBalances(account.publicKey)
+                    const balancesResult = await fetchPromise as Awaited<ReturnType<typeof chainHandler.fetchBalances>>
 
                     // Enhance token metadata for unknown tokens
                     balancesResult.balances = balancesResult.balances.map(balance => {
@@ -289,24 +311,13 @@ function WalletCardComponent({
                         })
                     }
 
-                    clearTimeout(fetchTimeoutId)
-
-                    if (!balancesResult?.balances || !Array.isArray(balancesResult.balances)) {
-                        throw new Error('Invalid balance data received')
-                    }
-
-                    // Update cache with successful result
-                    const newCacheEntry = {
+                    // Update cache
+                    walletCache.set(account.id, {
                         balances: balancesResult.balances,
                         prices: pricesResult,
-                        timestamp: now,
-                    }
-                    walletCache.set(account.id, newCacheEntry)
-
-                    setTokenData({
-                        balances: balancesResult.balances,
-                        prices: pricesResult,
+                        timestamp: now
                     })
+                    cleanupCache()
 
                     // Calculate total value
                     const totalValue = balancesResult.balances.reduce((sum, balance) => {
@@ -342,12 +353,12 @@ function WalletCardComponent({
                     }
                 } finally {
                     setIsLoading(false)
-                    abortControllerRef.current = undefined
+                    pendingRequests.current.delete(requestId)
                     debouncedFetches.delete(account.id)
                 }
-            }, 1000) // 1 second debounce
+            }, 1000)
 
-            debouncedFetches.set(account.id, timeoutId)
+            debouncedFetches.set(account.id, { timeoutId, controller })
         },
         [account.chain, account.publicKey, account.id, chainHandler, onUpdateValue, retryCount]
     )
@@ -366,28 +377,25 @@ function WalletCardComponent({
         return undefined
     }, [account.chain, account.publicKey, chainHandler, fetchData])
 
-    // Memoize the filtered balances calculation
+    // Helper function for token value calculation
+    const getTokenValue = (balance: ChainTokenBalance, prices: Record<string, ChainTokenPrice>) => {
+        const amount = Number(balance.balance) / Math.pow(10, balance.token.decimals)
+        const price = prices[balance.token.symbol]?.price || 0
+        return amount * price
+    }
+
+    // Optimize filtered balances calculation
     const filteredBalances = useMemo(() => {
         const walletHidden = hiddenTokens[account.id] || []
         return tokenData.balances
             .filter(balance => {
-                // Calculate token amount
+                if (!balance?.token?.decimals) return false
                 const amount = Number(balance.balance) / Math.pow(10, balance.token.decimals)
-                
-                // Skip tokens with zero balance
-                if (amount === 0) return false
-                
-                // Show all tokens if showHiddenTokens is true
-                if (showHiddenTokens) return true
-                
-                // Otherwise filter out hidden tokens
-                return !walletHidden.includes(balance.token.symbol)
+                return amount !== 0 && (showHiddenTokens || !walletHidden.includes(balance.token.symbol))
             })
             .sort((a, b) => {
-                const aAmount = Number(a.balance) / Math.pow(10, a.token.decimals)
-                const bAmount = Number(b.balance) / Math.pow(10, b.token.decimals)
-                const aValue = aAmount * (tokenData.prices[a.token.symbol]?.price || 0)
-                const bValue = bAmount * (tokenData.prices[b.token.symbol]?.price || 0)
+                const aValue = getTokenValue(a, tokenData.prices)
+                const bValue = getTokenValue(b, tokenData.prices)
                 return bValue - aValue
             })
     }, [tokenData.balances, tokenData.prices, hiddenTokens, account.id, showHiddenTokens])
@@ -408,12 +416,39 @@ function WalletCardComponent({
         return lastValueRef.current
     }, [filteredBalances, tokenData.prices])
 
-    // Notify parent of value changes
+    // Move the useEffect for value updates before any conditional returns
     useEffect(() => {
         if (onUpdateValue && !isLoading && !error && isFinite(totalValue)) {
             onUpdateValue(account.id, totalValue)
         }
     }, [account.id, totalValue, onUpdateValue, isLoading, error])
+
+    // Helper function to get explorer URL
+    const getExplorerUrl = useCallback((account: WalletAccount) => {
+        const { chain, publicKey } = account
+        
+        // Handle EVM chains
+        const evmChains = ['ethereum', 'polygon', 'arbitrum', 'optimism', 'base'] as const
+        if (evmChains.includes(chain as any)) {
+            const chainConfig = EVM_CHAINS[chain as keyof typeof EVM_CHAINS]
+            if (chainConfig) {
+                return `${chainConfig.explorerUrl}/address/${publicKey}`
+            }
+        }
+
+        // Handle other chains
+        switch (chain) {
+            case 'solana':
+                return `https://solscan.io/account/${publicKey}`
+            default:
+                // Handle non-EVM chains
+                if (['aptos', 'solana', 'sui'].includes(chain)) {
+                    const chainInfo = getChainInfo(chain as 'aptos' | 'solana' | 'sui')
+                    return chainInfo ? `${chainInfo.explorer}/address/${publicKey}` : '#'
+                }
+                return '#'
+        }
+    }, [])
 
     return (
         <>
@@ -447,16 +482,7 @@ function WalletCardComponent({
                                 )}
                             </button>
                             <a
-                                href={(() => {
-                                    switch (account.chain) {
-                                        case 'aptos':
-                                            return `https://explorer.aptoslabs.com/account/${account.publicKey}/coins?network=mainnet`
-                                        case 'sui':
-                                            return `https://suiscan.xyz/mainnet/account/${account.publicKey}`
-                                        default:
-                                            return getChainInfo(account.chain).explorer + '/address/' + account.publicKey
-                                    }
-                                })()}
+                                href={getExplorerUrl(account)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="p-1 hover:bg-accent rounded-md transition-colors"
@@ -473,7 +499,8 @@ function WalletCardComponent({
                                 const isHidden = walletHidden.includes(balance.token.symbol)
                                 
                                 // Get token address for key
-                                const tokenAddress = 'tokenAddress' in balance.token ? balance.token.tokenAddress : undefined
+                                const tokenAddress = 'tokenAddress' in balance.token ? balance.token.tokenAddress : 
+                                    'address' in balance.token ? balance.token.address : undefined
                                 const uniqueKey = tokenAddress ? 
                                     `${account.id}-${tokenAddress}` : 
                                     `${account.id}-${balance.token.symbol}`
@@ -495,7 +522,7 @@ function WalletCardComponent({
                                         onHide={() => toggleHideToken(balance.token.symbol)}
                                         isHidden={isHidden}
                                         showHiddenTokens={showHiddenTokens}
-                                        chainType={account.chain}
+                                        chainType={['aptos', 'solana', 'sui', 'ethereum'].includes(account.chain) ? account.chain as 'aptos' | 'solana' | 'sui' | 'ethereum' : undefined}
                                     />
                                 )
                             })}

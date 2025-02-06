@@ -19,7 +19,10 @@ export const PLATFORMS = [
     'Wells Fargo',
 ] as const satisfies readonly string[]
 
-export const CHAINS = ['aptos', 'solana', 'sui', 'base'] as const satisfies readonly string[]
+export const CHAINS = [
+    'aptos', 'solana', 'sui',
+    'ethereum', 'polygon', 'arbitrum', 'optimism', 'base'
+] as const satisfies readonly string[]
 
 export const BROKER_CATEGORIES = [
     'RSU',
@@ -150,11 +153,12 @@ export interface DebitAccount extends BaseAccount, CardDetails {
     }>
 }
 
-export interface WalletAccount extends Omit<BaseAccount, 'platform'> {
+export interface WalletAccount extends BaseAccount {
     readonly type: 'wallet'
     readonly chain: ChainType
     readonly status: AccountStatus
     readonly publicKey: string
+    readonly chainId?: number
     readonly isColdStorage?: boolean
     readonly metadata?: Readonly<{
         purpose?: string
@@ -293,9 +297,9 @@ export const SUPPORTED_CHAINS: readonly ChainType[] = CHAINS
 export const SUPPORTED_PLATFORMS: readonly PlatformType[] = PLATFORMS
 
 export interface AccountCardProps {
-    account: Account
-    compact?: boolean
-    isExpanded?: boolean
-    onUpdateValue?: (id: string, value: number) => void
-    showHiddenTokens?: boolean
+    readonly account: Account
+    readonly compact?: boolean
+    readonly isExpanded?: boolean
+    readonly onUpdateValue?: (id: string, value: number) => void
+    readonly showHiddenTokens?: boolean
 }

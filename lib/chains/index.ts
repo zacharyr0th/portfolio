@@ -2,6 +2,7 @@ import type { ChainHandler } from './types'
 import { aptosHandler, clearCache as clearAptosCache } from './aptos'
 import { solanaHandler, clearCache as clearSolanaCache } from './solana'
 import { suiHandler, clearCache as clearSuiCache } from './sui'
+import { evmHandler, clearCache as clearEvmCache } from './evm'
 import { logger } from '@/lib/utils/core/logger'
 import { ChainType } from './types'
 import { isValidChain } from './config'
@@ -11,6 +12,16 @@ export const chainHandlers: Readonly<Record<ChainType, ChainHandler>> = Object.f
     aptos: aptosHandler,
     solana: solanaHandler,
     sui: suiHandler,
+    ethereum: evmHandler,
+    'eth-main': evmHandler,
+    polygon: evmHandler,
+    'polygon-main': evmHandler,
+    arbitrum: evmHandler,
+    'arbitrum-main': evmHandler,
+    optimism: evmHandler,
+    'optimism-main': evmHandler,
+    base: evmHandler,
+    'base-main': evmHandler,
 })
 
 // Utility function to get a chain handler with type safety and error handling
@@ -20,12 +31,15 @@ export const getChainHandler = (chain: string): ChainHandler | null => {
         return null
     }
 
-    if (!isValidChain(chain)) {
+    // Handle chain variations (e.g., 'eth-main' -> 'ethereum')
+    const normalizedChain = chain.replace(/-main$/, '')
+    
+    if (!isValidChain(normalizedChain)) {
         logger.warn(`Unsupported chain requested: ${chain}`)
         return null
     }
 
-    const handler = chainHandlers[chain]
+    const handler = chainHandlers[normalizedChain as ChainType]
     if (!handler) {
         logger.error(`Handler not found for supported chain: ${chain}`)
         return null
@@ -40,6 +54,7 @@ export const clearAllCaches = () => {
         clearAptosCache()
         clearSolanaCache()
         clearSuiCache()
+        clearEvmCache()
         logger.debug('Successfully cleared all chain handler caches')
     } catch (error) {
         logger.error(

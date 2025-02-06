@@ -49,6 +49,11 @@ const CHAIN_MAPPING = {
     'aptos': 'aptos',
     'solana': 'solana',
     'sui': 'sui',
+    'ethereum': 'ethereum',
+    'polygon': 'polygon',
+    'arbitrum': 'arbitrum',
+    'optimism': 'optimism',
+    'base': 'base'
 } as const
 
 // Cache configuration

@@ -21,10 +21,46 @@ export const HANDLER_CONSTANTS = {
 
 export interface BaseHandlerConfig {
     chainName: string
-    fetchBalancesImpl: (publicKey: string) => Promise<{ balances: ChainTokenBalance[] }>
+    fetchBalancesImpl: (publicKey: string, accountId: string) => Promise<{ balances: ChainTokenBalance[] }>
     fetchPricesImpl: () => Promise<Record<string, ChainTokenPrice>>
     getExplorerUrlImpl: (publicKey: string, accountId: string) => string
     BalanceDisplayComponent: ComponentType<BalanceDisplayProps>
+}
+
+// Cache configuration
+export const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+export const CACHE_STALE_TIME = 30 * 1000 // 30 seconds
+
+export class Cache<T> {
+    private data: T | null = null
+    private lastUpdated: number = 0
+
+    constructor(
+        private ttl: number = CACHE_TTL,
+        private staleTime: number = CACHE_STALE_TIME
+    ) {}
+
+    get(key?: string): T | null {
+        const now = Date.now()
+        if (!this.data || now - this.lastUpdated > this.ttl) {
+            return null
+        }
+        return this.data
+    }
+
+    set(key: string | undefined, value: T): void {
+        this.data = value
+        this.lastUpdated = Date.now()
+    }
+
+    clear(): void {
+        this.data = null
+        this.lastUpdated = 0
+    }
+
+    isStale(): boolean {
+        return Date.now() - this.lastUpdated > this.staleTime
+    }
 }
 
 export class BaseChainHandler implements ChainHandler {
@@ -93,7 +129,7 @@ export class BaseChainHandler implements ChainHandler {
         throw lastError ?? new Error('Max retries exceeded')
     }
 
-    async fetchBalances(publicKey: string): Promise<{ balances: ChainTokenBalance[] }> {
+    async fetchBalances(publicKey: string, accountId: string): Promise<{ balances: ChainTokenBalance[] }> {
         logger.debug(`Fetching balances for ${this.config.chainName} wallet: ${publicKey}`)
 
         if (!publicKey?.trim()) {
@@ -102,14 +138,15 @@ export class BaseChainHandler implements ChainHandler {
         }
 
         // Check cache first
-        const cached = this.balanceCache.get(publicKey)
+        const cacheKey = `${accountId}:${publicKey}`
+        const cached = this.balanceCache.get(cacheKey)
         if (cached) {
             logger.debug(`${this.config.chainName}: Returning cached balances`)
             return { balances: cached }
         }
 
         // Check for pending request
-        const pendingKey = `balances:${publicKey}`
+        const pendingKey = `balances:${cacheKey}`
         const pendingRequest = this.pendingRequests.get(pendingKey)
         if (pendingRequest) {
             logger.debug(`${this.config.chainName}: Returning pending request`)
@@ -118,7 +155,7 @@ export class BaseChainHandler implements ChainHandler {
 
         try {
             const request = this.withRetry(async () => {
-                const result = await this.config.fetchBalancesImpl(publicKey)
+                const result = await this.config.fetchBalancesImpl(publicKey, accountId)
                 if (!result?.balances) {
                     throw new Error('Invalid response structure')
                 }
@@ -129,7 +166,7 @@ export class BaseChainHandler implements ChainHandler {
             const response = await request
 
             // Cache successful results
-            this.balanceCache.set(publicKey, response.balances)
+            this.balanceCache.set(cacheKey, response.balances)
             return response
         } catch (error) {
             logger.warn(

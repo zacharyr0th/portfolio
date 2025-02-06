@@ -9,7 +9,7 @@ import {
     type LucideIcon,
 } from 'lucide-react'
 import type { AccountType, ChainType } from './types'
-import { memo } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { CHAIN_ICONS as CHAIN_ICON_PATHS, PLATFORM_ICONS as PLATFORM_ICON_PATHS } from './constants'
 
 // Unified icon registry with improved type safety
@@ -31,6 +31,9 @@ interface IconProps {
     readonly className?: string
 }
 
+// Image loading error cache to prevent repeated attempts
+const failedImages = new Set<string>()
+
 // Optimized Icon component with improved error handling and performance
 export const Icon = memo(function IconComponent({
     type,
@@ -40,11 +43,49 @@ export const Icon = memo(function IconComponent({
     opacity = 100,
     className,
 }: IconProps) {
+    const [hasError, setHasError] = useState(false)
     const baseClassName = 'h-5 w-5'
     const finalClassName = cn(baseClassName, className)
 
+    const handleImageError = useCallback((e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+        const target = e.target as HTMLImageElement
+        if (!target || !target.parentNode) return
+
+        // Add to failed images cache
+        if (src) {
+            failedImages.add(src)
+        }
+
+        // Hide the errored image
+        target.style.display = 'none'
+
+        // Create fallback container
+        const fallbackContainer = document.createElement('div')
+        fallbackContainer.className = finalClassName
+
+        // Determine and render fallback icon
+        const FallbackIcon = icon
+            ? ACCOUNT_ICONS[icon as AccountType] || AlertCircle
+            : AlertCircle
+        const fallbackElement = document.createElement('div')
+        fallbackElement.className = finalClassName
+        fallbackElement.innerHTML = `<svg class="${finalClassName}">${FallbackIcon}</svg>`
+
+        // Replace errored image with fallback
+        target.parentNode.appendChild(fallbackElement)
+        setHasError(true)
+    }, [finalClassName, icon, src])
+
     // Handle image type icons
     if (type === 'image' && src) {
+        // Check if image previously failed
+        if (failedImages.has(src) || hasError) {
+            const FallbackIcon = icon
+                ? ACCOUNT_ICONS[icon as AccountType] || AlertCircle
+                : AlertCircle
+            return <FallbackIcon className={finalClassName} aria-label={alt} />
+        }
+
         return (
             <div className={finalClassName}>
                 <Image
@@ -53,33 +94,13 @@ export const Icon = memo(function IconComponent({
                     width={20}
                     height={20}
                     className={cn(
-                        'w-full h-auto brightness-0 invert',
+                        'w-full h-auto',
+                        src.includes('chain-icons') ? 'brightness-0 invert' : '',
                         opacity !== 100 && `opacity-${opacity}`
                     )}
                     priority={false}
                     loading="lazy"
-                    onError={e => {
-                        const target = e.target as HTMLImageElement
-                        if (!target || !target.parentNode) return
-
-                        // Hide the errored image
-                        target.style.display = 'none'
-
-                        // Create fallback container
-                        const fallbackContainer = document.createElement('div')
-                        fallbackContainer.className = finalClassName
-
-                        // Determine and render fallback icon
-                        const FallbackIcon = icon
-                            ? ACCOUNT_ICONS[icon as AccountType] || AlertCircle
-                            : AlertCircle
-                        const fallbackElement = document.createElement('div')
-                        fallbackElement.className = finalClassName
-                        fallbackElement.innerHTML = `<svg class="${finalClassName}">${FallbackIcon}</svg>`
-
-                        // Replace errored image with fallback
-                        target.parentNode.appendChild(fallbackElement)
-                    }}
+                    onError={handleImageError}
                 />
             </div>
         )

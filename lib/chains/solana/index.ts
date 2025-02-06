@@ -95,7 +95,7 @@ async function getBeenzPrice(): Promise<number> {
 // Create Solana handler instance
 const solanaHandlerInstance = new BaseChainHandler({
     chainName: 'solana',
-    async fetchBalancesImpl(publicKey: string) {
+    fetchBalancesImpl: async (publicKey: string, accountId: string) => {
         if (!publicKey?.trim()) {
             logger.warn('No public key provided for Solana balance fetch')
             return { balances: [] }
@@ -189,7 +189,7 @@ const solanaHandlerInstance = new BaseChainHandler({
             throw error
         }
     },
-    async fetchPricesImpl() {
+    fetchPricesImpl: async () => {
         try {
             // Get all unique token symbols
             const tokenSymbols = Object.values(TOKEN_SYMBOL_MAP).map(t => t.symbol)
@@ -230,7 +230,7 @@ const solanaHandlerInstance = new BaseChainHandler({
             return {}
         }
     },
-    getExplorerUrlImpl: (publicKey: string) => {
+    getExplorerUrlImpl: (publicKey: string, accountId: string) => {
         const chain = chainInfo['solana']
         return `${chain.explorer}/account/${publicKey}`
     },

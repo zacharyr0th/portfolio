@@ -61,6 +61,11 @@ function generateWalletConfigs() {
         solana: {} as Record<string, any>,
         aptos: {} as Record<string, any>,
         sui: {} as Record<string, any>,
+        ethereum: {} as Record<string, any>,
+        polygon: {} as Record<string, any>,
+        arbitrum: {} as Record<string, any>,
+        optimism: {} as Record<string, any>,
+        base: {} as Record<string, any>,
     }
 
     // Get all environment variables
@@ -73,6 +78,11 @@ function generateWalletConfigs() {
         solana: Object.keys(envVars).filter(key => key.startsWith('SOLANA_WALLET')),
         aptos: Object.keys(envVars).filter(key => key.startsWith('APTOS_WALLET')),
         sui: Object.keys(envVars).filter(key => key.startsWith('SUI_WALLET')),
+        eth: Object.keys(envVars).filter(key => key.startsWith('ETH_WALLET')),
+        polygon: Object.keys(envVars).filter(key => key.startsWith('POLYGON_WALLET')),
+        arbitrum: Object.keys(envVars).filter(key => key.startsWith('ARBITRUM_WALLET')),
+        optimism: Object.keys(envVars).filter(key => key.startsWith('OPTIMISM_WALLET')),
+        base: Object.keys(envVars).filter(key => key.startsWith('BASE_WALLET')),
     })
 
     // Process each environment variable for wallets
@@ -81,18 +91,21 @@ function generateWalletConfigs() {
 
         if (!value || value === 'your_solana_wallet_address' || 
             value === 'your_aptos_wallet_address' || 
-            value === 'your_sui_wallet_address') {
+            value === 'your_sui_wallet_address' ||
+            value === 'your_eth_wallet_address') {
             logger.debug(`Skipping placeholder wallet value for ${key}`)
             return
         }
 
         // Match wallet public keys by prefix
         const solanaMatch = key.match(/^SOLANA_WALLET_(.+)$/)
-        if (solanaMatch) {
-            logger.debug(`Found Solana wallet match:`, { key, match: solanaMatch[1] })
-        }
         const aptosMatch = key.match(/^APTOS_WALLET_(.+)$/)
         const suiMatch = key.match(/^SUI_WALLET_(.+)$/)
+        const ethMatch = key.match(/^ETH_WALLET_(.+)$/)
+        const polygonMatch = key.match(/^POLYGON_WALLET_(.+)$/)
+        const arbitrumMatch = key.match(/^ARBITRUM_WALLET_(.+)$/)
+        const optimismMatch = key.match(/^OPTIMISM_WALLET_(.+)$/)
+        const baseMatch = key.match(/^BASE_WALLET_(.+)$/)
 
         try {
             if (solanaMatch?.[1]) {
@@ -113,6 +126,36 @@ function generateWalletConfigs() {
                 walletConfigs.sui[id] = createWalletConfig(id, name, 'sui', value)
                 logger.debug(`Created Sui wallet config:`, { id, name, publicKey: value })
             }
+            else if (ethMatch?.[1]) {
+                const name = ethMatch[1]
+                const id = `eth-${name.toLowerCase()}`
+                walletConfigs.ethereum[id] = createWalletConfig(id, name, 'ethereum', value)
+                logger.debug(`Created Ethereum wallet config:`, { id, name, publicKey: value })
+            }
+            else if (polygonMatch?.[1]) {
+                const name = polygonMatch[1]
+                const id = `polygon-${name.toLowerCase()}`
+                walletConfigs.polygon[id] = createWalletConfig(id, name, 'polygon', value)
+                logger.debug(`Created Polygon wallet config:`, { id, name, publicKey: value })
+            }
+            else if (arbitrumMatch?.[1]) {
+                const name = arbitrumMatch[1]
+                const id = `arbitrum-${name.toLowerCase()}`
+                walletConfigs.arbitrum[id] = createWalletConfig(id, name, 'arbitrum', value)
+                logger.debug(`Created Arbitrum wallet config:`, { id, name, publicKey: value })
+            }
+            else if (optimismMatch?.[1]) {
+                const name = optimismMatch[1]
+                const id = `optimism-${name.toLowerCase()}`
+                walletConfigs.optimism[id] = createWalletConfig(id, name, 'optimism', value)
+                logger.debug(`Created Optimism wallet config:`, { id, name, publicKey: value })
+            }
+            else if (baseMatch?.[1]) {
+                const name = baseMatch[1]
+                const id = `base-${name.toLowerCase()}`
+                walletConfigs.base[id] = createWalletConfig(id, name, 'base', value)
+                logger.debug(`Created Base wallet config:`, { id, name, publicKey: value })
+            }
         } catch (error) {
             logger.error(`Error creating wallet config for ${key}:`, error instanceof Error ? error : new Error(String(error)))
         }
@@ -123,7 +166,13 @@ function generateWalletConfigs() {
         solanaCount: Object.keys(walletConfigs.solana).length,
         aptosCount: Object.keys(walletConfigs.aptos).length,
         suiCount: Object.keys(walletConfigs.sui).length,
+        ethereumCount: Object.keys(walletConfigs.ethereum).length,
+        polygonCount: Object.keys(walletConfigs.polygon).length,
+        arbitrumCount: Object.keys(walletConfigs.arbitrum).length,
+        optimismCount: Object.keys(walletConfigs.optimism).length,
+        baseCount: Object.keys(walletConfigs.base).length,
         solanaKeys: Object.keys(walletConfigs.solana),
+        ethereumKeys: Object.keys(walletConfigs.ethereum),
     })
 
     return walletConfigs
@@ -143,9 +192,15 @@ export async function GET() {
             walletCount: {
                 solana: Object.keys(walletConfigs.solana).length,
                 aptos: Object.keys(walletConfigs.aptos).length,
-                sui: Object.keys(walletConfigs.sui).length
+                sui: Object.keys(walletConfigs.sui).length,
+                ethereum: Object.keys(walletConfigs.ethereum).length,
+                polygon: Object.keys(walletConfigs.polygon).length,
+                arbitrum: Object.keys(walletConfigs.arbitrum).length,
+                optimism: Object.keys(walletConfigs.optimism).length,
+                base: Object.keys(walletConfigs.base).length
             },
-            solanaWallets: Object.values(walletConfigs.solana).map(w => w.publicKey)
+            solanaWallets: Object.values(walletConfigs.solana).map(w => w.publicKey),
+            ethereumWallets: Object.values(walletConfigs.ethereum).map(w => w.publicKey)
         })
 
         // Return the configurations

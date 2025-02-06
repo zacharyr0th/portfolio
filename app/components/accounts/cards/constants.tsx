@@ -84,12 +84,16 @@ export const CATEGORY_DESCRIPTIONS = {
     Leverage: 'Leverage Trading Account',
 } as const
 
-// Icon configurations with improved type safety
-export const CHAIN_ICONS: Readonly<Record<ChainType, { src: string; opacity?: number }>> = {
-    aptos: { src: '/icons/account-icons/aptos.webp' },
-    solana: { src: '/icons/account-icons/solana.webp', opacity: 50 },
-    sui: { src: '/icons/account-icons/sui.webp', opacity: 50 },
-    base: { src: '/icons/account-icons/base.webp', opacity: 50 },
+// Chain icons with improved type safety
+export const CHAIN_ICONS = {
+    aptos: { src: '/icons/chain-icons/aptos.webp', opacity: 90 },
+    solana: { src: '/icons/chain-icons/solana.webp', opacity: 90 },
+    sui: { src: '/icons/chain-icons/sui.webp', opacity: 90 },
+    ethereum: { src: '/icons/chain-icons/ethereum.webp', opacity: 90 },
+    polygon: { src: '/icons/chain-icons/polygon.webp', opacity: 90 },
+    arbitrum: { src: '/icons/chain-icons/arbitrum.webp', opacity: 90 },
+    optimism: { src: '/icons/chain-icons/optimism.webp', opacity: 90 },
+    base: { src: '/icons/chain-icons/base.webp', opacity: 90 },
 } as const
 
 export const PLATFORM_ICONS: Readonly<Record<string, { src: string; opacity?: number }>> = {
@@ -162,69 +166,148 @@ export const PLATFORM_URLS: Readonly<PlatformUrls> = {
     },
 } as const
 
+// Cache for formatters
+const formatters = new Map<string, Intl.DateTimeFormat>()
+
+// Cache for chain icons
+const chainIconCache = new Map<ChainType, { src: string; opacity: number }>()
+
+// Cache for platform icons
+const platformIconCache = new Map<string, { src: string; opacity?: number }>()
+
+// Cache for token icons
+const tokenIconCache = new Map<string, { src: string; opacity?: number }>()
+
 // Helper functions for UI components with memoization
-export const getChainIcon = (chain: ChainType) => CHAIN_ICONS[chain]
+export const getChainIcon = (chain: ChainType) => {
+    if (!chainIconCache.has(chain)) {
+        chainIconCache.set(chain, CHAIN_ICONS[chain])
+    }
+    return chainIconCache.get(chain)
+}
+
 export const getPlatformIcon = (
     platform: BankPlatform | BrokerPlatform | CexPlatform | CreditPlatform | DebitPlatform
-) => PLATFORM_ICONS[platform]
-export const getTokenIcon = (symbol: string) => TOKEN_ICONS[symbol]
-export const formatLastUpdated = (date: string | Date) => new Date(date).toLocaleString()
+) => {
+    const icon = PLATFORM_ICONS[platform]
+    if (icon && !platformIconCache.has(platform)) {
+        platformIconCache.set(platform, icon)
+    }
+    return platformIconCache.get(platform) || icon
+}
 
-// Wallet account utility functions
+export const getTokenIcon = (symbol: string) => {
+    const icon = TOKEN_ICONS[symbol]
+    if (icon && !tokenIconCache.has(symbol)) {
+        tokenIconCache.set(symbol, icon)
+    }
+    return tokenIconCache.get(symbol) || icon
+}
+
+export const formatLastUpdated = (date: string | Date) => {
+    const key = 'lastUpdated'
+    if (!formatters.has(key)) {
+        formatters.set(key, new Intl.DateTimeFormat(undefined, {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: false
+        }))
+    }
+    return formatters.get(key)!.format(new Date(date))
+}
+
+// Wallet account utility functions with memoization
+const addressFormatCache = new Map<string, string>()
+
 export const formatAddress = (address: string, chain: ChainType): string => {
-    if (!address) return ''
+    const cacheKey = `${chain}-${address}`
+    if (addressFormatCache.has(cacheKey)) {
+        return addressFormatCache.get(cacheKey)!
+    }
 
-    // For Aptos addresses, ensure 0x prefix and proper length
-    if (chain === 'aptos') {
+    let formattedAddress = ''
+    if (!address) {
+        formattedAddress = ''
+    } else if (chain === 'aptos') {
         let cleanAddress = address.trim().toLowerCase()
         cleanAddress = cleanAddress.startsWith('0x') ? cleanAddress : `0x${cleanAddress}`
-        // Ensure the address is 66 characters (0x + 64 hex chars)
         if (cleanAddress.length !== 66) {
             logger.warn(`Invalid Aptos address length: ${cleanAddress}`)
         }
-        return cleanAddress
+        formattedAddress = cleanAddress
+    } else {
+        formattedAddress = chain === 'solana' ? address : address
     }
 
-    // For Solana addresses, return as is since they're base58 encoded
-    return chain === 'solana' ? address : address
+    addressFormatCache.set(cacheKey, formattedAddress)
+    return formattedAddress
 }
 
-// Helper to distribute chain balance among active wallets
+// Cache for chain balance distribution
+const chainBalanceCache = new Map<string, WalletAccount[]>()
+
 export const distributeChainBalance = (
     wallets: WalletAccount[],
     chain: ChainType
 ): WalletAccount[] => {
-    // Only return wallets that match the specified chain and are active
-    return wallets.filter(w => w.chain === chain && w.status === 'active')
+    const cacheKey = `${chain}-${wallets.map(w => w.id).join('-')}`
+    
+    if (chainBalanceCache.has(cacheKey)) {
+        return chainBalanceCache.get(cacheKey)!
+    }
+
+    const result = wallets.filter(w => w.chain === chain && w.status === 'active')
+    chainBalanceCache.set(cacheKey, result)
+    return result
 }
 
-// Helper functions for prioritized accounts
+// Cache for prioritized accounts
+const prioritizedAccountsCache = {
+    debit: null as Pick<DebitAccount, 'id' | 'name' | 'priority'>[] | null,
+    credit: null as Pick<CreditAccount, 'id' | 'name' | 'priority' | 'rewards'>[] | null
+}
+
 export const getPrioritizedDebitAccounts = (): Pick<DebitAccount, 'id' | 'name' | 'priority'>[] => {
-    return Object.values(debitAccounts as Record<string, DebitAccount>)
-        .sort((a, b) => ((a.priority || 99) - (b.priority || 99)))
-        .map(account => ({
-            id: account.id,
-            name: account.name,
-            priority: account.priority,
-        }))
+    if (!prioritizedAccountsCache.debit) {
+        prioritizedAccountsCache.debit = Object.values(debitAccounts as Record<string, DebitAccount>)
+            .sort((a, b) => ((a.priority || 99) - (b.priority || 99)))
+            .map(account => ({
+                id: account.id,
+                name: account.name,
+                priority: account.priority,
+            }))
+    }
+    return prioritizedAccountsCache.debit
 }
 
 export const getPrioritizedCreditAccounts = (): Pick<
     CreditAccount,
     'id' | 'name' | 'priority' | 'rewards'
 >[] => {
-    return Object.values(creditAccounts as Record<string, CreditAccount>)
-        .sort((a, b) => ((a.priority || 99) - (b.priority || 99)))
-        .map(account => ({
-            id: account.id,
-            name: account.name,
-            priority: account.priority,
-            rewards: account.rewards,
-        }))
+    if (!prioritizedAccountsCache.credit) {
+        prioritizedAccountsCache.credit = Object.values(creditAccounts as Record<string, CreditAccount>)
+            .sort((a, b) => ((a.priority || 99) - (b.priority || 99)))
+            .map(account => ({
+                id: account.id,
+                name: account.name,
+                priority: account.priority,
+                rewards: account.rewards,
+            }))
+    }
+    return prioritizedAccountsCache.credit
 }
 
-// Credit metrics with memoization
-const memoizedMetrics = new Map<string, number>()
+// Cache for credit metrics
+let creditMetricsCache: {
+    totalCreditLimit: number
+    totalBalance: number
+    averageAPR: number
+    utilizationRate: number
+} | null = null
 
 export const getCreditMetrics = (): {
     totalCreditLimit: number
@@ -232,14 +315,19 @@ export const getCreditMetrics = (): {
     averageAPR: number
     utilizationRate: number
 } => {
+    if (creditMetricsCache) {
+        return creditMetricsCache
+    }
+
     const accounts = Object.values(creditAccounts as Record<string, CreditAccount>)
     if (accounts.length === 0) {
-        return {
+        creditMetricsCache = {
             totalCreditLimit: 0,
             totalBalance: 0,
             averageAPR: 0,
             utilizationRate: 0,
         }
+        return creditMetricsCache
     }
 
     const metrics = {
@@ -248,8 +336,26 @@ export const getCreditMetrics = (): {
         averageAPR: accounts.reduce((sum, account) => sum + account.apr, 0) / accounts.length,
     }
 
-    return {
+    creditMetricsCache = {
         ...metrics,
         utilizationRate: metrics.totalBalance / metrics.totalCreditLimit,
     }
+
+    return creditMetricsCache
+}
+
+// Cache cleanup function
+const CACHE_CLEANUP_INTERVAL = 5 * 60 * 1000 // 5 minutes
+
+const cleanupCaches = () => {
+    addressFormatCache.clear()
+    chainBalanceCache.clear()
+    prioritizedAccountsCache.debit = null
+    prioritizedAccountsCache.credit = null
+    creditMetricsCache = null
+}
+
+// Set up periodic cache cleanup
+if (typeof window !== 'undefined') {
+    setInterval(cleanupCaches, CACHE_CLEANUP_INTERVAL)
 }
