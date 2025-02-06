@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { logger } from '@/lib/utils/core/logger'
 
 // Prefix all keys to avoid collisions
@@ -48,22 +48,23 @@ function cleanupStorage(): void {
             }
         }
     } catch (error) {
-        logger.warn('Error cleaning up localStorage:', error)
+        logger.warn('Error cleaning up localStorage:', { error: error instanceof Error ? error.message : String(error) })
     }
 }
 
 export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((prev: T) => T)) => void] {
     const safeKey = sanitizeKey(key)
+    const initialValueRef = useRef(initialValue)
 
     // Get from local storage then parse stored json or return initialValue
     const readValue = useCallback((): T => {
         if (typeof window === 'undefined') {
-            return initialValue
+            return initialValueRef.current
         }
 
         try {
             const item = localStorage.getItem(safeKey)
-            if (!item) return initialValue
+            if (!item) return initialValueRef.current
 
             // Validate stored timestamp
             const timestamp = localStorage.getItem(`${safeKey}_timestamp`)
@@ -71,26 +72,27 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
                 // Data is older than 30 days, clear it
                 localStorage.removeItem(safeKey)
                 localStorage.removeItem(`${safeKey}_timestamp`)
-                return initialValue
+                return initialValueRef.current
             }
 
             // Validate data structure
             const parsed = JSON.parse(item)
-            if (typeof parsed !== typeof initialValue) {
+            if (typeof parsed !== typeof initialValueRef.current) {
                 throw new Error('Invalid stored data type')
             }
 
             return parsed as T
         } catch (error) {
-            logger.warn(`Error reading localStorage key "${safeKey}":`, error)
+            logger.warn(`Error reading localStorage key "${safeKey}":`, { error: error instanceof Error ? error.message : String(error) })
             // Clear invalid data
             localStorage.removeItem(safeKey)
             localStorage.removeItem(`${safeKey}_timestamp`)
-            return initialValue
+            return initialValueRef.current
         }
-    }, [initialValue, safeKey])
+    }, [safeKey])
 
-    const [storedValue, setStoredValue] = useState<T>(readValue)
+    // Initialize state with value from localStorage or initial value
+    const [storedValue, setStoredValue] = useState<T>(() => readValue())
 
     const setValue = useCallback(
         (value: T | ((prev: T) => T)) => {
@@ -99,22 +101,25 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
                     cleanupStorage()
                 }
 
-                const valueToStore = value instanceof Function ? value(storedValue) : value
-                const valueString = JSON.stringify(valueToStore)
+                // Calculate new value outside of setState to avoid unnecessary re-renders
+                const newValue = value instanceof Function ? value(storedValue) : value
+                const valueString = JSON.stringify(newValue)
 
                 // Check size before storing
                 if (valueString.length * 2 > MAX_STORAGE_SIZE) {
                     throw new Error('Value exceeds maximum storage size')
                 }
 
-                setStoredValue(valueToStore)
-
-                if (typeof window !== 'undefined') {
-                    localStorage.setItem(safeKey, valueString)
-                    localStorage.setItem(`${safeKey}_timestamp`, Date.now().toString())
+                // Only update state and localStorage if value has changed
+                if (JSON.stringify(storedValue) !== valueString) {
+                    setStoredValue(newValue)
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem(safeKey, valueString)
+                        localStorage.setItem(`${safeKey}_timestamp`, Date.now().toString())
+                    }
                 }
             } catch (error) {
-                logger.warn(`Error setting localStorage key "${safeKey}":`, error)
+                logger.warn(`Error setting localStorage key "${safeKey}":`, { error: error instanceof Error ? error.message : String(error) })
             }
         },
         [safeKey, storedValue]
@@ -122,24 +127,23 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
 
     // Sync state if storage changes in another window
     useEffect(() => {
-        function handleStorageChange(e: StorageEvent) {
+        const handleStorageChange = (e: StorageEvent) => {
             if (e.key === safeKey && e.newValue !== null) {
                 try {
-                    setStoredValue(JSON.parse(e.newValue))
+                    const newValue = JSON.parse(e.newValue)
+                    // Only update if value has actually changed
+                    if (JSON.stringify(storedValue) !== e.newValue) {
+                        setStoredValue(newValue)
+                    }
                 } catch (error) {
-                    logger.warn(`Error handling storage change for "${safeKey}":`, error)
+                    logger.warn(`Error handling storage change for "${safeKey}":`, { error: error instanceof Error ? error.message : String(error) })
                 }
             }
         }
 
         window.addEventListener('storage', handleStorageChange)
         return () => window.removeEventListener('storage', handleStorageChange)
-    }, [safeKey])
-
-    // Read value on mount
-    useEffect(() => {
-        setStoredValue(readValue())
-    }, [readValue])
+    }, [safeKey, storedValue])
 
     return [storedValue, setValue]
 } 
