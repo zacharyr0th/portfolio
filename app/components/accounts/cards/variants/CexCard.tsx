@@ -5,7 +5,7 @@ import { BaseCard } from '../BaseCard'
 import { TokenBalance } from '../TokenBalance'
 import { exchangeHandlers, type SupportedExchange } from '@/lib/cex'
 import { logger } from '@/lib/utils/core/logger'
-import { useLocalStorage } from '@/lib/hooks/useLocalStorage'
+import { useLocalStorage } from '@/lib/utils/hooks/useLocalStorage'
 
 // Constants
 const REFRESH_INTERVAL = 5 * 60 * 1000 // 5 minutes
@@ -43,6 +43,7 @@ function CexCardComponent({
     const [error, setError] = useState<string | null>(null)
     const [isOpen, setIsOpen] = useState(isExpanded)
     const [lastFetchTime, setLastFetchTime] = useState(0)
+    const [totalValueState, setTotalValueState] = useState(0)
     
     // Add hidden tokens state
     const [hiddenTokens, setHiddenTokens] = useLocalStorage<Record<string, string[]>>(
@@ -164,19 +165,20 @@ function CexCardComponent({
 
             const total = processedBalances.reduce((sum, b) => sum + b.usdValue, 0)
             setBalances(processedBalances)
-            onUpdateValue?.(account.id, total)
+            setTotalValueState(total)
             setLastFetchTime(now)
             setError(null)
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Failed to fetch balances'
             logger.error(`Error fetching balances for ${account.id}: ${errorMessage}`)
             setError(errorMessage)
-            onUpdateValue?.(account.id, 0)
+            setTotalValueState(0)
         } finally {
             setIsLoading(false)
         }
-    }, [handler, account.id, account.platform, onUpdateValue, lastFetchTime])
+    }, [handler, account.id, account.platform, lastFetchTime])
 
+    // Set up the fetch interval
     useEffect(() => {
         fetchBalances()
         const intervalId = setInterval(fetchBalances, REFRESH_INTERVAL)
@@ -196,24 +198,23 @@ function CexCardComponent({
             .sort((a, b) => b.usdValue - a.usdValue)
     }, [balances, hiddenTokens, account.id, showHiddenTokens])
 
-    // Calculate total value based on filtered balances
-    const totalValue = useMemo(() => {
-        return filteredBalances.reduce((sum, balance) => sum + balance.usdValue, 0)
-    }, [filteredBalances])
-
+    // Update parent with total value changes
     useEffect(() => {
         if (onUpdateValue) {
-            onUpdateValue(account.id, totalValue)
+            onUpdateValue(account.id, totalValueState)
         }
-    }, [account.id, totalValue, onUpdateValue])
+    }, [account.id, totalValueState, onUpdateValue])
 
-    const shouldUseCompactTokens = filteredBalances.length > 5
+    const shouldUseCompactTokens = useMemo(() => 
+        filteredBalances.length > 5, 
+        [filteredBalances.length]
+    )
 
     return (
         <BaseCard
             account={{
                 ...account,
-                value: totalValue,
+                value: totalValueState,
             }}
             expanded={isOpen}
             onToggle={() => setIsOpen(!isOpen)}
@@ -229,9 +230,16 @@ function CexCardComponent({
                         const price = balance.usdValue / quantity
                         const accountHidden = hiddenTokens[account.id] || []
                         const isHidden = accountHidden.includes(balance.token.symbol)
+                        
+                        // Create a more unique key using address if available
+                        const tokenAddress = 'address' in balance.token ? balance.token.address : undefined
+                        const uniqueKey = tokenAddress ? 
+                            `${account.id}-${tokenAddress}` : 
+                            `${account.id}-${balance.token.symbol}-${account.platform}`
+                        
                         return (
                             <TokenBalance
-                                key={`${account.id}-${balance.token.symbol}`}
+                                key={uniqueKey}
                                 token={balance.token}
                                 quantity={quantity}
                                 price={price}

@@ -1,8 +1,8 @@
 import { useState, useCallback, useMemo, memo, useEffect, useRef } from 'react'
 import { BaseCard } from '../BaseCard'
-import { Copy, Check, ExternalLink } from 'lucide-react'
-import { Badge } from '@/app/components/ui/badge'
+import { Copy, Check, ExternalLink, Image as ImageIcon } from 'lucide-react'
 import { TokenBalance } from '../TokenBalance'
+import { NftModal } from '../modals/NftModal'
 import {
     chainHandlers,
     isValidChain,
@@ -13,7 +13,7 @@ import {
 } from '@/lib/chains'
 import type { WalletAccount } from '../types'
 import { logger } from '@/lib/utils/core/logger'
-import { useLocalStorage } from '@/lib/hooks/useLocalStorage'
+import { useLocalStorage } from '@/lib/utils/hooks/useLocalStorage'
 
 // Constants
 const COPY_TIMEOUT_MS = 2000
@@ -55,6 +55,7 @@ function WalletCardComponent({
 }: WalletCardProps) {
     const [copied, setCopied] = useState(false)
     const [isOpen, setIsOpen] = useState(isExpanded)
+    const [showNftModal, setShowNftModal] = useState(false)
     const [tokenData, setTokenData] = useState<{
         balances: ChainTokenBalance[]
         prices: Record<string, ChainTokenPrice>
@@ -415,86 +416,110 @@ function WalletCardComponent({
     }, [account.id, totalValue, onUpdateValue, isLoading, error])
 
     return (
-        <BaseCard
-            account={{
-                ...account,
-                value: totalValue,
-            }}
-            expanded={isOpen}
-            onToggle={() => setIsOpen(!isOpen)}
-            variant={compact ? 'compact' : 'detailed'}
-            isLoading={isLoading}
-            error={error}
-            lastUpdated={lastFetchTime}
-        >
-            {!compact && isOpen && !isLoading && !error && (
-                <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                        <div className="flex-1 font-mono text-xs text-muted-foreground truncate">
-                            {account.publicKey}
+        <>
+            <BaseCard
+                account={{
+                    ...account,
+                    value: totalValue,
+                }}
+                expanded={isOpen}
+                onToggle={() => setIsOpen(!isOpen)}
+                variant={compact ? 'compact' : 'detailed'}
+                isLoading={isLoading}
+                error={error}
+                lastUpdated={lastFetchTime}
+            >
+                {!compact && isOpen && !isLoading && !error && (
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                            <div className="font-mono text-xs text-muted-foreground truncate">
+                                {account.publicKey}
+                            </div>
+                            <button
+                                onClick={handleCopy}
+                                className="p-1 hover:bg-accent rounded-md transition-colors"
+                                aria-label="Copy address"
+                            >
+                                {copied ? (
+                                    <Check className="h-3.5 w-3.5 text-success" />
+                                ) : (
+                                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                                )}
+                            </button>
+                            <a
+                                href={(() => {
+                                    switch (account.chain) {
+                                        case 'aptos':
+                                            return `https://explorer.aptoslabs.com/account/${account.publicKey}/coins?network=mainnet`
+                                        case 'sui':
+                                            return `https://suiscan.xyz/mainnet/account/${account.publicKey}`
+                                        default:
+                                            return getChainInfo(account.chain).explorer + '/address/' + account.publicKey
+                                    }
+                                })()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1 hover:bg-accent rounded-md transition-colors"
+                                aria-label="View on explorer"
+                            >
+                                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                            </a>
                         </div>
-                        <button
-                            onClick={handleCopy}
-                            className="p-1 hover:bg-accent rounded-md transition-colors"
-                            aria-label="Copy address"
-                        >
-                            {copied ? (
-                                <Check className="h-3.5 w-3.5 text-success" />
-                            ) : (
-                                <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                            )}
-                        </button>
-                        <a
-                            href={(() => {
-                                switch (account.chain) {
-                                    case 'aptos':
-                                        return `https://explorer.aptoslabs.com/account/${account.publicKey}/coins?network=mainnet`
-                                    case 'sui':
-                                        return `https://suiscan.xyz/mainnet/account/${account.publicKey}`
-                                    default:
-                                        return getChainInfo(account.chain).explorer + '/address/' + account.publicKey
-                                }
-                            })()}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1 hover:bg-accent rounded-md transition-colors"
-                            aria-label="View on explorer"
-                        >
-                            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                        </a>
+                        <div className="flex flex-col gap-1">
+                            {filteredBalances.map(balance => {
+                                const amount = Number(balance.balance) / Math.pow(10, balance.token.decimals)
+                                const price = tokenData.prices[balance.token.symbol]?.price || 0
+                                const walletHidden = hiddenTokens[account.id] || []
+                                const isHidden = walletHidden.includes(balance.token.symbol)
+                                
+                                // Get token address for key
+                                const tokenAddress = 'tokenAddress' in balance.token ? balance.token.tokenAddress : undefined
+                                const uniqueKey = tokenAddress ? 
+                                    `${account.id}-${tokenAddress}` : 
+                                    `${account.id}-${balance.token.symbol}`
+                                
+                                return (
+                                    <TokenBalance
+                                        key={uniqueKey}
+                                        token={{
+                                            symbol: balance.token.symbol,
+                                            name: balance.token.name,
+                                            decimals: balance.token.decimals,
+                                            address: tokenAddress
+                                        }}
+                                        quantity={amount}
+                                        price={price}
+                                        showPrice
+                                        compact={compact}
+                                        canHide={true}
+                                        onHide={() => toggleHideToken(balance.token.symbol)}
+                                        isHidden={isHidden}
+                                        showHiddenTokens={showHiddenTokens}
+                                        chainType={account.chain}
+                                    />
+                                )
+                            })}
+                        </div>
+                        <div className="pt-2 border-t border-border">
+                            <button
+                                onClick={() => setShowNftModal(true)}
+                                className="w-full flex items-center justify-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent rounded-md transition-colors"
+                            >
+                                <ImageIcon className="h-3.5 w-3.5" />
+                                View NFTs
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex flex-col gap-1">
-                        {filteredBalances.map(balance => {
-                            const amount = Number(balance.balance) / Math.pow(10, balance.token.decimals)
-                            const price = tokenData.prices[balance.token.symbol]?.price || 0
-                            const walletHidden = hiddenTokens[account.id] || []
-                            const isHidden = walletHidden.includes(balance.token.symbol)
-                            
-                            return (
-                                <TokenBalance
-                                    key={`${account.id}-${balance.token.symbol}`}
-                                    token={{
-                                        symbol: balance.token.symbol,
-                                        name: balance.token.name,
-                                        decimals: balance.token.decimals,
-                                        address: 'tokenAddress' in balance.token ? balance.token.tokenAddress : undefined
-                                    }}
-                                    quantity={amount}
-                                    price={price}
-                                    showPrice
-                                    compact={compact}
-                                    canHide={true}
-                                    onHide={() => toggleHideToken(balance.token.symbol)}
-                                    isHidden={isHidden}
-                                    showHiddenTokens={showHiddenTokens}
-                                    chainType={account.chain}
-                                />
-                            )
-                        })}
-                    </div>
-                </div>
-            )}
-        </BaseCard>
+                )}
+            </BaseCard>
+            
+            <NftModal
+                isOpen={showNftModal}
+                onClose={() => setShowNftModal(false)}
+                walletAddress={account.publicKey}
+                chain={account.chain}
+            />
+        </>
     )
 }
 

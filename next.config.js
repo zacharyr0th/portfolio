@@ -38,7 +38,7 @@ const nextConfig = {
   // Image optimization
   images: {
     unoptimized: false, // Enable image optimization
-    domains: [], // Add domains you'll use for images
+    domains: ['cdn.simplehash.com'], // Add domains you'll use for images
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
     imageSizes: [16, 32, 48, 64, 96, 128, 256],
   },
