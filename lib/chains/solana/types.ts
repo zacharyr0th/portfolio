@@ -29,14 +29,15 @@ export interface SolanaToken {
 export interface TokenBalance {
   token: SolanaToken;
   balance: string;
-  uiAmount?: number; // Human readable amount
+  uiAmount: number; // Human readable amount
+  valueUsd?: number; // USD value of the balance
 }
 
 export interface TokenPrice {
   price: number;
   priceChange24h: number;
-  lastUpdated?: number;
-  confidence?: number; // Price confidence score (0-1)
+  lastUpdated: number;
+  confidence: number;
 }
 
 // RPC Response Types

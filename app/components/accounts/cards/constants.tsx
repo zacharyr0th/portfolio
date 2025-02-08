@@ -13,7 +13,7 @@ import type {
   DebitAccount,
 } from "./types";
 import { logger } from "@/lib/utils/core/logger";
-import { creditAccounts, debitAccounts } from "../config";
+import { creditAccounts } from "../config";
 
 // UI Components
 interface LastUpdatedProps {

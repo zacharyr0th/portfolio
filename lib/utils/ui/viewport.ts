@@ -1,4 +1,5 @@
-import type { Viewport } from 'next'
+import type { Viewport } from "next";
+import { headers as getHeaders } from "next/headers";
 
 /**
  * Default viewport configuration for the application
@@ -7,10 +8,10 @@ import type { Viewport } from 'next'
  * - Optimizes for mobile-first design
  */
 export const viewport: Viewport = {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    minimumScale: 1,
-    userScalable: false,
-    viewportFit: 'cover',
-} as const
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  minimumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+} as const;

@@ -1,49 +1,51 @@
 export interface SuiToken {
-    symbol: string
-    name: string
-    decimals: number
-    tokenAddress: string
-    chainId?: number
-    isNative?: boolean
+  symbol: string;
+  name: string;
+  decimals: number;
+  tokenAddress: string;
+  chainId?: number;
+  isNative?: boolean;
 }
 
 export interface TokenBalance {
-    token: SuiToken
-    balance: string
+  token: SuiToken;
+  balance: string;
+  uiAmount: number;
+  price?: TokenPrice;
 }
 
 export interface TokenPrice {
-    price: number
-    priceChange24h: number
+  price: number;
+  priceChange24h: number;
 }
 
 export interface SuiCoinMetadata {
-    decimals: number
-    name: string
-    symbol: string
-    description: string
-    iconUrl: string | null
-    id: string | null
+  decimals: number;
+  name: string;
+  symbol: string;
+  description: string;
+  iconUrl: string | null;
+  id: string | null;
 }
 
 export interface SuiBalance {
-    coinType: string
-    coinObjectCount: number
-    totalBalance: string
-    lockedBalance: Record<string, string>
+  coinType: string;
+  coinObjectCount: number;
+  totalBalance: string;
+  lockedBalance: Record<string, string>;
 }
 
 export interface SuiCoinPage {
-    data: SuiCoin[]
-    hasNextPage: boolean
-    nextCursor: string | null
+  data: SuiCoin[];
+  hasNextPage: boolean;
+  nextCursor: string | null;
 }
 
 export interface SuiCoin {
-    coinType: string
-    coinObjectId: string
-    version: string
-    digest: string
-    balance: string
-    previousTransaction: string
+  coinType: string;
+  coinObjectId: string;
+  version: string;
+  digest: string;
+  balance: string;
+  previousTransaction: string;
 }

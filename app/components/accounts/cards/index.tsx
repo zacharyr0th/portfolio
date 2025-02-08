@@ -6,12 +6,16 @@ import type {
   DebitAccount,
   WalletAccount,
 } from "./types";
-import { WalletCard } from "./variants/WalletCard";
-import { CexCard } from "./variants/CexCard";
-import { BrokerCard } from "./variants/BrokerCard";
-import { BankCard } from "./variants/BankCard";
-import { CreditCard } from "./variants/CreditCard";
-import { DebitCard } from "./variants/DebitCard";
+import { CexCard } from "./crypto/CexCard";
+import { BrokerCard } from "./tradfi/BrokerCard";
+import { BankCard } from "./tradfi/BankCard";
+import { CreditCard } from "./tradfi/CreditCard";
+import { DebitCard } from "./tradfi/DebitCard";
+import { EvmCard } from "./crypto/EvmCard";
+import { SolanaCard } from "./crypto/SolanaCard";
+import { AptosCard } from "./crypto/AptosCard";
+import { SuiCard } from "./crypto/SuiCard";
+import { SeiCard } from "./crypto/SeiCard";
 import type { SharedCardProps } from "./types";
 import type {
   BankPlatform,
@@ -63,72 +67,109 @@ function assertDebitPlatform(account: DebitAccount) {
   return { ...account, platform: account.platform as DebitPlatform };
 }
 
-export function AccountCard({
-  account,
-  compact = false,
-  isExpanded = false,
-  onUpdateValue,
-  showHiddenTokens = false,
-}: AccountCardProps) {
+export function AccountCard({ account, ...props }: AccountCardProps) {
   switch (account.type) {
     case "wallet": {
-      const walletAccount = assertWalletChain(account);
-      if (!walletAccount) return null;
-      return (
-        <WalletCard
-          account={walletAccount}
-          compact={compact}
-          isExpanded={isExpanded}
-          onUpdateValue={onUpdateValue}
-          showHiddenTokens={showHiddenTokens}
-        />
-      );
+      const normalizedAccount = assertWalletChain(account);
+      if (!normalizedAccount) {
+        logger.error(`Invalid chain type for wallet: ${account.chain}`);
+        return null;
+      }
+
+      // Handle L1 chains
+      switch (normalizedAccount.chain) {
+        case "solana":
+          return <SolanaCard account={normalizedAccount} {...props} />;
+        case "aptos":
+          return <AptosCard account={normalizedAccount} {...props} />;
+        case "sui":
+          return <SuiCard account={normalizedAccount} {...props} />;
+        case "sei":
+          return <SeiCard account={normalizedAccount} {...props} />;
+      }
+
+      // Handle EVM chains
+      const evmChains = [
+        "ethereum",
+        "polygon",
+        "arbitrum",
+        "arbitrum_nova",
+        "avalanche",
+        "base",
+        "blast",
+        "bsc",
+        "canto",
+        "celo",
+        "fantom",
+        "gnosis",
+        "linea",
+        "manta",
+        "mantle",
+        "mode",
+        "moonbeam",
+        "opbnb",
+        "optimism",
+        "polygon_zkevm",
+        "scroll",
+        "zksync_era",
+        "zora",
+      ] as const;
+
+      if (evmChains.includes(normalizedAccount.chain as any)) {
+        return <EvmCard account={normalizedAccount} {...props} />;
+      }
+
+      logger.error(`Unsupported chain type: ${normalizedAccount.chain}`);
+      return null;
     }
     case "cex":
-      return (
-        <CexCard
-          account={assertCexPlatform(account)}
-          compact={compact}
-          isExpanded={isExpanded}
-          onUpdateValue={onUpdateValue}
-          showHiddenTokens={showHiddenTokens}
-        />
-      );
+      return <CexCard account={account as CexAccount} {...props} />;
     case "broker":
       return (
         <BrokerCard
-          account={assertBrokerPlatform(account)}
-          compact={compact}
-          isExpanded={isExpanded}
+          account={
+            account as Omit<BrokerAccount, "platform"> & {
+              platform: BrokerPlatform;
+            }
+          }
+          {...props}
         />
       );
     case "bank":
       return (
         <BankCard
-          account={assertBankPlatform(account)}
-          compact={compact}
-          isExpanded={isExpanded}
+          account={
+            account as Omit<BankAccount, "platform"> & {
+              platform: BankPlatform;
+            }
+          }
+          {...props}
         />
       );
     case "credit":
       return (
         <CreditCard
-          account={assertCreditPlatform(account)}
-          compact={compact}
-          isExpanded={isExpanded}
+          account={
+            account as Omit<CreditAccount, "platform"> & {
+              platform: CreditPlatform;
+            }
+          }
+          {...props}
         />
       );
     case "debit":
       return (
         <DebitCard
-          account={assertDebitPlatform(account)}
-          compact={compact}
-          isExpanded={isExpanded}
+          account={
+            account as Omit<DebitAccount, "platform"> & {
+              platform: DebitPlatform;
+            }
+          }
+          {...props}
         />
       );
-    default: {
-      logger.error("Unknown account type:", account);
+    default:
+      logger.error(`Unsupported account type: ${(account as any).type}`);
       return null;
-    }
   }
 }

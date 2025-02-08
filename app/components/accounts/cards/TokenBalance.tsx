@@ -1,32 +1,95 @@
-import { memo, useState, useMemo, useCallback } from "react";
+import { memo, useMemo, useCallback } from "react";
 import { formatCurrency } from "@/lib/utils/core/format";
 import { cn } from "@/lib/utils";
-import { EyeOff, Eye, ExternalLink, Copy, Check } from "lucide-react";
+import { EyeOff, Eye, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import type { ChainType } from "@/lib/chains/constants";
+import { CHAIN_CONFIG } from "@/lib/chains/constants";
+
+// Add scrollbar hiding CSS
+const hideScrollbarClass = [
+  "scrollbar-none",
+  "[&::-webkit-scrollbar]",
+  "overflow-y-auto",
+  "hover:scrollbar-none",
+].join(" ");
+
+// Format large numbers to K/M/B format with 2 decimal places
+function formatLargeNumber(num: number): string {
+  const absNum = Math.abs(num);
+  if (absNum >= 1e9) {
+    return (num / 1e9).toFixed(2) + "B";
+  } else if (absNum >= 1e6) {
+    return (num / 1e6).toFixed(2) + "M";
+  } else if (absNum >= 1e3) {
+    return (num / 1e3).toFixed(2) + "K";
+  } else if (absNum < 0.01) {
+    return "< 0.01";
+  } else {
+    return num.toFixed(2);
+  }
+}
+
+// Smart decimal precision based on token and value
+function getDecimalPrecision(
+  symbol: string,
+  quantity: number,
+  value: number,
+  chainType?: ChainType,
+): { min: number; max: number } {
+  // For very small quantities, show more decimals
+  if (quantity < 0.000001) return { min: 8, max: 8 };
+  if (quantity < 0.001) return { min: 6, max: 6 };
+  if (quantity < 0.1) return { min: 4, max: 4 };
+
+  // Handle stablecoins consistently
+  if (["USDC", "USDT", "USD", "DAI"].includes(symbol.toUpperCase())) {
+    return { min: 2, max: 2 };
+  }
+
+  // Handle native tokens based on chain type
+  if (chainType) {
+    const isNativeToken =
+      (chainType === "aptos" && symbol.toUpperCase() === "APT") ||
+      (chainType === "solana" && symbol.toUpperCase() === "SOL") ||
+      (chainType in CHAIN_CONFIG &&
+        CHAIN_CONFIG[chainType as keyof typeof CHAIN_CONFIG]?.nativeCurrency
+          .symbol === symbol.toUpperCase());
+
+    if (isNativeToken) {
+      return quantity < 1 ? { min: 4, max: 6 } : { min: 2, max: 4 };
+    }
+  }
+
+  // For values under $1, show more decimals
+  if (value < 1) return { min: 2, max: 4 };
+  // For regular values, keep it simple
+  return { min: 2, max: 2 };
+}
 
 interface TokenBalanceProps {
   token: {
     symbol: string;
-    name?: string;
-    decimals?: number;
+    name: string;
+    decimals: number;
     address?: string;
   };
   quantity: number;
   price?: number;
-  className?: string;
   showPrice?: boolean;
   compact?: boolean;
-  onHide?: () => void;
   canHide?: boolean;
+  onHide?: () => void;
   isHidden?: boolean;
   showHiddenTokens?: boolean;
-  chainType?: "aptos" | "solana" | "sui" | "ethereum";
+  chainType?: ChainType;
+  className?: string;
 }
 
 // Memoize formatting functions
 const formatters = new Map<string, Intl.NumberFormat>();
 
-const getFormatter = (min: number, max: number) => {
+const getFormatter = (min: number, max: number): Intl.NumberFormat => {
   const key = `${min}-${max}`;
   if (!formatters.has(key)) {
     formatters.set(
@@ -42,11 +105,15 @@ const getFormatter = (min: number, max: number) => {
 };
 
 // Helper functions moved to the top level
-const getDisplaySymbol = (symbol: string, address?: string) => {
+const getDisplaySymbol = (symbol: string, address?: string): string => {
   // Blacklisted tokens - return empty string to hide them
   if (
     address ===
-    "0x3c1d4a86594d681ff7e5d5a233965daeabdc6a15fe5672ceeda5260038857183::vcoins::V<0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa35796bd11542a::stapt_token::StakedApt>"
+      "0x3c1d4a86594d681ff7e5d5a233965daeabdc6a15fe5672ceeda5260038857183::vcoins::V<0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa35796bd11542a::stapt_token::StakedApt>" ||
+    // Additional blacklisted scam APT tokens
+    (symbol.toUpperCase() === "APT" &&
+      !address?.includes("0x1::aptos_coin::AptosCoin") &&
+      address !== "0x0000000000000000000000000000000000000000")
   ) {
     return "";
   }
@@ -103,167 +170,65 @@ const getDisplayName = (
   symbol: string,
   address?: string,
   name?: string,
-  chainType?: string,
-) => {
-  // Native ETH
-  if (chainType === "ethereum" && symbol.toUpperCase() === "ETH") {
-    return "Ethereum";
+  chainType?: ChainType,
+): string => {
+  // Native token
+  if (chainType && chainType in CHAIN_CONFIG) {
+    const config = CHAIN_CONFIG[chainType as keyof typeof CHAIN_CONFIG];
+    if (
+      address === "0x0000000000000000000000000000000000000000" &&
+      symbol.toUpperCase() === config.nativeCurrency.symbol
+    ) {
+      return config.nativeCurrency.name;
+    }
   }
-  // LayerZero USDC
-  if (
-    symbol.toUpperCase() === "USDC" &&
-    address ===
-      "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC"
-  ) {
-    return "LayerZero USDC";
+
+  // Special cases for non-EVM chains
+  if (chainType === "aptos" && symbol.toUpperCase() === "APT") {
+    return "Aptos";
   }
-  // MKL Tokens
-  if (
-    address ===
-    "0x878370592f9129e14b76558689a4b570ad22678111df775befbfcbc9fb3d90ab"
-  ) {
-    return "MKL (Fungible Asset)";
+  if (chainType === "solana" && symbol.toUpperCase() === "SOL") {
+    return "Solana";
   }
-  if (
-    address ===
-    "0x5ae6789dd2fec1a9ec9cccfb3acaf12e93d432f0a3a42c92fe1a9d490b7bbc06::mkl_token::MKL"
-  ) {
-    return "MKL (Legacy Coin)";
+  if (chainType === "bitcoin" && symbol.toUpperCase() === "BTC") {
+    return "Bitcoin";
   }
-  if (
-    address ===
-    "0x5ae6789dd2fec1a9ec9cccfb3acaf12e93d432f0a3a42c92fe1a9d490b7bbc06::house_lp::MKLP<0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC>"
-  ) {
-    return "MKLP-USDC LP Token";
-  }
-  if (
-    address ===
-    "0x3b5200e090d188c274e06b0d64b3f66638fb996fb0b350499975ff36b1f4595"
-  ) {
-    return "Escrowed MKL";
-  }
-  // CELL Token
-  if (
-    address ===
-    "0x2ebb2ccac5e027a87fa0e2e5f656a3a4238d6a48d93ec9b610d570fc0aa0df12"
-  ) {
-    return "Cellana Token";
-  }
-  // Amnis stAPT
-  if (
-    address ===
-    "0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa35796bd11542a::stapt_token::StakedApt"
-  ) {
-    return "Amnis Staked APT";
-  }
+
   return name || symbol;
-};
-
-const getExplorerUrl = (
-  symbol: string,
-  address?: string,
-  chainType?: string,
-) => {
-  if (!address) return null;
-  switch (symbol.toUpperCase()) {
-    case "APT":
-      return `https://explorer.aptoslabs.com/coin/0x1::aptos_coin::AptosCoin?network=mainnet`;
-    case "USDC":
-      // Check if it's LayerZero USDC
-      if (
-        address ===
-        "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC"
-      ) {
-        return `https://explorer.aptoslabs.com/coin/${address}?network=mainnet`;
-      }
-      // Check if it's native Aptos USDC
-      if (
-        address ===
-        "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b"
-      ) {
-        return `https://explorer.aptoslabs.com/coin/${address}?network=mainnet`;
-      }
-      return null;
-    // MKL Tokens
-    case "MKL":
-    case "MKLP":
-    case "ESMKL":
-    case "CELL":
-    case "STAPT":
-      return `https://explorer.aptoslabs.com/coin/${address}?network=mainnet`;
-    case "SUI":
-      return `https://suiscan.xyz/mainnet/account/${address}`;
-    case "ETH":
-      // For native ETH, use address view
-      if (chainType === "ethereum") {
-        return `https://etherscan.io/address/${address}`;
-      }
-      return `https://etherscan.io/token/${address}`;
-    default:
-      // For Ethereum tokens
-      if (chainType === "ethereum") {
-        return `https://etherscan.io/token/${address}`;
-      }
-      return null;
-  }
-};
-
-// Smart decimal precision based on token and value
-const getDecimalPrecision = (
-  symbol: string,
-  quantity: number,
-  value: number,
-  chainType?: string,
-) => {
-  // For very small quantities, show more decimals
-  if (quantity < 0.000001) return { min: 8, max: 8 };
-  if (quantity < 0.001) return { min: 6, max: 6 };
-  if (quantity < 0.1) return { min: 4, max: 4 };
-
-  // Token-specific formatting
-  switch (symbol) {
-    case "BTC":
-      return { min: 6, max: 8 };
-    case "ETH":
-      // For native ETH, show more decimals
-      if (chainType === "ethereum") {
-        return quantity < 1 ? { min: 4, max: 6 } : { min: 4, max: 4 };
-      }
-      return { min: 4, max: 6 };
-    case "SOL":
-    case "APT":
-    case "SUI":
-      return quantity < 1 ? { min: 4, max: 6 } : { min: 2, max: 4 };
-    case "USDC":
-    case "USDT":
-    case "USD":
-      return { min: 2, max: 2 };
-    default:
-      // For values under $1, show more decimals
-      if (value < 1) return { min: 2, max: 4 };
-      // For regular values, keep it simple
-      return { min: 2, max: 2 };
-  }
 };
 
 function TokenBalanceComponent({
   token,
   quantity,
-  price,
-  className,
-  showPrice = true,
+  price = 0,
+  showPrice = false,
   compact = false,
-  onHide,
   canHide = false,
+  onHide,
   isHidden = false,
   showHiddenTokens = false,
   chainType,
-}: TokenBalanceProps) {
-  const [copied, setCopied] = useState(false);
+  className,
+}: TokenBalanceProps): JSX.Element | null {
   const value = useMemo(
     () => (price ? quantity * price : 0),
     [price, quantity],
   );
+
+  const getExplorerUrl = useCallback(() => {
+    if (!token.address) return "#";
+
+    switch (chainType) {
+      case "aptos":
+        return `https://explorer.aptoslabs.com/account/${token.address}`;
+      case "solana":
+        return `https://solscan.io/token/${token.address}`;
+      case "ethereum":
+        return `https://etherscan.io/token/${token.address}`;
+      default:
+        return "#";
+    }
+  }, [token.address, chainType]);
 
   // Move all hooks before any conditional returns
   const isBlacklisted = useMemo(
@@ -276,11 +241,16 @@ function TokenBalanceComponent({
   const isNativeToken = useMemo(
     () =>
       chainType &&
-      ((chainType === "aptos" && token.symbol.toUpperCase() === "APT") ||
-        (chainType === "solana" && token.symbol.toUpperCase() === "SOL") ||
-        (chainType === "sui" && token.symbol.toUpperCase() === "SUI") ||
-        (chainType === "ethereum" && token.symbol.toUpperCase() === "ETH")),
-    [chainType, token.symbol],
+      ((chainType === "aptos" &&
+        String(token.symbol || "").toUpperCase() === "APT") ||
+        (chainType === "solana" &&
+          String(token.symbol || "").toUpperCase() === "SOL") ||
+        (chainType in CHAIN_CONFIG &&
+          token.address === "0x0000000000000000000000000000000000000000" &&
+          String(token.symbol || "").toUpperCase() ===
+            CHAIN_CONFIG[chainType as keyof typeof CHAIN_CONFIG]?.nativeCurrency
+              .symbol)),
+    [chainType, token.symbol, token.address],
   );
 
   const displaySymbol = useMemo(
@@ -293,10 +263,7 @@ function TokenBalanceComponent({
     [token.symbol, token.address, token.name, chainType],
   );
 
-  const explorerUrl = useMemo(
-    () => getExplorerUrl(token.symbol, token.address, chainType),
-    [token.symbol, token.address, chainType],
-  );
+  const explorerUrl = useMemo(() => getExplorerUrl(), [getExplorerUrl]);
 
   const { min, max } = useMemo(
     () =>
@@ -309,21 +276,22 @@ function TokenBalanceComponent({
     [token.symbol, quantity, value, chainType],
   );
 
-  const formattedQuantity = useMemo(() => {
+  const computedQuantity = useMemo(() => {
+    // For large numbers, use the formatLargeNumber function
+    if (quantity >= 1000) {
+      return formatLargeNumber(quantity);
+    }
+    // For smaller numbers, use the regular formatter
     const formatter = getFormatter(min, max);
     return formatter.format(quantity);
   }, [quantity, min, max]);
 
-  const handleCopy = useCallback(() => {
-    if (token.address) {
-      navigator.clipboard.writeText(token.address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [token.address]);
-
   // Early return after all hooks
   if (isBlacklisted) return null;
+
+  const displayQuantity = computedQuantity;
+  const displayValue = value ? `$${formatLargeNumber(value)}` : "$0.00";
+  const displayPrice = price ? formatCurrency(price, price >= 0.01) : "$0.00";
 
   return (
     <div
@@ -348,42 +316,21 @@ function TokenBalanceComponent({
       <div className="flex flex-col justify-center min-w-0">
         <div className="flex items-center gap-1">
           {explorerUrl ? (
-            <>
-              <Link
-                href={explorerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cn(
-                  "font-medium leading-none hover:underline inline-flex items-center gap-1",
-                  compact ? "text-xs" : "text-sm",
-                  isNativeToken && "text-foreground font-semibold",
-                )}
-              >
-                {displaySymbol}
-                <ExternalLink
-                  className={cn(
-                    "h-3 w-3",
-                    isNativeToken && "text-foreground/70",
-                  )}
-                />
-              </Link>
-              {token.address && (
-                <button
-                  onClick={handleCopy}
-                  className={cn(
-                    "p-1 rounded-md transition-colors",
-                    isNativeToken ? "hover:bg-accent/30" : "hover:bg-accent",
-                  )}
-                  aria-label={copied ? "Address copied" : "Copy token address"}
-                >
-                  {copied ? (
-                    <Check className="h-3 w-3 text-success" />
-                  ) : (
-                    <Copy className="h-3 w-3 text-muted-foreground" />
-                  )}
-                </button>
+            <Link
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                "font-medium leading-none hover:underline inline-flex items-center gap-1",
+                compact ? "text-xs" : "text-sm",
+                isNativeToken && "text-foreground font-semibold",
               )}
-            </>
+            >
+              {displaySymbol}
+              <ExternalLink
+                className={cn("h-3 w-3", isNativeToken && "text-foreground/70")}
+              />
+            </Link>
           ) : (
             <span
               className={cn(
@@ -419,7 +366,7 @@ function TokenBalanceComponent({
             isNativeToken ? "text-foreground/90" : "text-muted-foreground",
           )}
         >
-          {formattedQuantity}
+          {displayQuantity}
         </span>
       </div>
 
@@ -433,7 +380,7 @@ function TokenBalanceComponent({
               isNativeToken && "font-medium",
             )}
           >
-            {formatCurrency(value, value >= 0.01)}
+            {displayValue}
           </span>
           {showPrice && price && price > 0 && !compact && (
             <span
@@ -444,11 +391,7 @@ function TokenBalanceComponent({
                   : "text-muted-foreground/50 group-hover:text-foreground/90",
               )}
             >
-              $
-              {price.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+              {displayPrice}
             </span>
           )}
         </div>

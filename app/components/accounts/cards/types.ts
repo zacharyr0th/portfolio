@@ -115,6 +115,7 @@ export interface BaseAccount {
   readonly type: AccountType;
   readonly platform?: PlatformType;
   readonly value: number;
+  readonly formattedValue?: string;
   readonly lastUpdated: string;
   readonly notes?: string;
   readonly isRetirement?: boolean;
@@ -175,6 +176,17 @@ export interface WalletAccount extends BaseAccount {
   readonly publicKey: string;
   readonly chainId?: number;
   readonly isColdStorage?: boolean;
+  readonly balances?: ReadonlyArray<{
+    token: {
+      symbol: string;
+      name: string;
+      decimals: number;
+      address?: string;
+    };
+    balance: string;
+    uiAmount: number;
+    price?: number;
+  }>;
   readonly metadata?: Readonly<{
     purpose?: string;
     wallet?: string;

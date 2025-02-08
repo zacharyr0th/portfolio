@@ -1,5 +1,4 @@
 import { chainInfo } from "../config";
-import { fetchTokenPrices } from "@/lib/data/cmc";
 import type {
   TokenBalance,
   TokenPrice,
@@ -34,6 +33,28 @@ const DEFAULT_PRICE: TokenPrice = {
   price: 0,
   priceChange24h: 0,
 };
+
+// Helper function to fetch token price from standard RPC
+async function fetchTokenPrice(coinType: string): Promise<TokenPrice> {
+  try {
+    const response = await fetch(
+      `/api/sui/price?coinType=${encodeURIComponent(coinType)}`,
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to fetch price: ${response.status}`);
+    }
+    const data = await response.json();
+    return {
+      price: data.price || 0,
+      priceChange24h: data.priceChange24h || 0,
+    };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    logger.error(`Error fetching price for ${coinType}: ${errorMessage}`);
+    return DEFAULT_PRICE;
+  }
+}
 
 // Update the RPC request function
 async function makeRpcRequest<T>(method: string, params: any[]): Promise<T> {
@@ -85,7 +106,7 @@ async function fetchBalances(publicKey: string): Promise<SuiBalance[]> {
 // Create Sui handler instance
 const suiHandlerInstance = new BaseChainHandler({
   chainName: "sui",
-  fetchBalancesImpl: async (publicKey: string) => {
+  fetchBalancesImpl: async (publicKey: string, accountId: string) => {
     if (!publicKey?.trim()) {
       logger.warn("No public key provided for Sui balance fetch");
       return { balances: [] };
@@ -93,38 +114,7 @@ const suiHandlerInstance = new BaseChainHandler({
 
     try {
       logger.debug(`Fetching balances for Sui address: ${publicKey}`);
-      const rpcUrl = chainInfo.sui.rpcEndpoint;
-      if (!rpcUrl) {
-        throw new Error("Sui RPC endpoint not configured");
-      }
-      logger.debug(`Using Sui RPC endpoint: ${rpcUrl}`);
-
-      const requestBody = {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "suix_getAllBalances",
-        params: [publicKey],
-      };
-      logger.debug(`Sending Sui RPC request: ${JSON.stringify(requestBody)}`);
-
-      const response = await fetch(rpcUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(HANDLER_CONSTANTS.REQUEST_TIMEOUT),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch balances: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (!data.result || !Array.isArray(data.result)) {
-        throw new Error("Invalid response format");
-      }
-
-      logger.debug(`Parsed Sui balance data:`, data);
-      const balances: SuiBalance[] = data.result;
+      const balances = await fetchBalances(publicKey);
 
       // Process and validate each balance
       const processedBalances = await Promise.all(
@@ -159,14 +149,17 @@ const suiHandlerInstance = new BaseChainHandler({
             }
 
             // Calculate token value
-            const value =
+            const uiAmount =
               Number(balance.totalBalance) / Math.pow(10, tokenInfo.decimals);
 
             // Skip dust amounts
             const minValue = isNativeSui ? 0.000001 : 0.01;
-            if (value < minValue) {
+            if (uiAmount < minValue) {
               return null;
             }
+
+            // Fetch price data from QuickNode
+            const priceData = await fetchTokenPrice(balance.coinType);
 
             return {
               token: {
@@ -178,6 +171,8 @@ const suiHandlerInstance = new BaseChainHandler({
                 isNative: isNativeSui,
               },
               balance: balance.totalBalance,
+              uiAmount,
+              price: priceData,
             } as TokenBalance;
           } catch (err) {
             logger.error(
@@ -201,8 +196,8 @@ const suiHandlerInstance = new BaseChainHandler({
             return 1;
 
           // Then sort by value
-          const aValue = Number(a.balance) / Math.pow(10, a.token.decimals);
-          const bValue = Number(b.balance) / Math.pow(10, b.token.decimals);
+          const aValue = a.uiAmount * (a.price?.price || 0);
+          const bValue = b.uiAmount * (b.price?.price || 0);
           return bValue - aValue;
         });
 
@@ -221,26 +216,21 @@ const suiHandlerInstance = new BaseChainHandler({
       const tokenSymbols = Object.values(TOKEN_SYMBOL_MAP).map((t) => t.symbol);
       const uniqueSymbols = Array.from(new Set(tokenSymbols));
 
-      // Fetch prices from price service
-      const prices = await fetchTokenPrices(uniqueSymbols).catch((err) => {
-        logger.error(`Failed to fetch token prices: ${err.message}`);
-        return null;
-      });
+      // Fetch prices for each token
+      const prices: Record<string, TokenPrice> = {};
+      await Promise.all(
+        uniqueSymbols.map(async (symbol) => {
+          const coinType = Object.entries(TOKEN_SYMBOL_MAP).find(
+            ([_, info]) => info.symbol === symbol,
+          )?.[0];
+          if (coinType) {
+            const price = await fetchTokenPrice(coinType);
+            prices[symbol] = price;
+          }
+        }),
+      );
 
-      const tokenPrices: Record<string, TokenPrice> = {};
-
-      // Process each token's price, using DEFAULT_PRICE if fetch failed
-      for (const symbol of uniqueSymbols) {
-        const price = prices?.[symbol];
-        tokenPrices[symbol] = price
-          ? {
-              price: price.price,
-              priceChange24h: price.percent_change_24h || 0,
-            }
-          : DEFAULT_PRICE;
-      }
-
-      return tokenPrices;
+      return prices;
     } catch (error) {
       logger.error(
         `Error fetching Sui prices: ${error instanceof Error ? error.message : "Unknown error"}`,

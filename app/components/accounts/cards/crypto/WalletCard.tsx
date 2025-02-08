@@ -13,7 +13,7 @@ import {
 import type { WalletAccount, ChainType } from "../types";
 import { logger } from "@/lib/utils/core/logger";
 import { useLocalStorage } from "@/lib/utils/hooks/useLocalStorage";
-import { EVM_CHAINS } from "@/lib/chains/evm/types";
+import { EVM_CHAINS } from "@/lib/chains/evm+/types";
 
 // Constants
 const COPY_TIMEOUT_MS = 2000;
@@ -63,6 +63,12 @@ interface WalletCardProps {
   isExpanded?: boolean;
   onUpdateValue?: (id: string, value: number) => void;
   showHiddenTokens?: boolean;
+}
+
+// Add utility function for shortening addresses
+function shortenAddress(address: string): string {
+  if (!address) return "";
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
 }
 
 function WalletCardComponent({
@@ -448,6 +454,12 @@ function WalletCardComponent({
         if (!balance?.token?.decimals) return false;
         const amount =
           Number(balance.balance) / Math.pow(10, balance.token.decimals);
+        // Show zero balances for Aptos accounts
+        if (account.chain === "aptos") {
+          return (
+            showHiddenTokens || !walletHidden.includes(balance.token.symbol)
+          );
+        }
         return (
           amount !== 0 &&
           (showHiddenTokens || !walletHidden.includes(balance.token.symbol))
@@ -464,6 +476,7 @@ function WalletCardComponent({
     hiddenTokens,
     account.id,
     showHiddenTokens,
+    account.chain,
   ]);
 
   // Memoize the total value calculation
@@ -544,7 +557,7 @@ function WalletCardComponent({
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <div className="font-mono text-xs text-muted-foreground truncate">
-                {account.publicKey}
+                {shortenAddress(account.publicKey)}
               </div>
               <button
                 onClick={handleCopy}
@@ -606,14 +619,8 @@ function WalletCardComponent({
                     isHidden={isHidden}
                     showHiddenTokens={showHiddenTokens}
                     chainType={
-                      ["aptos", "solana", "sui", "ethereum"].includes(
-                        account.chain,
-                      )
-                        ? (account.chain as
-                            | "aptos"
-                            | "solana"
-                            | "sui"
-                            | "ethereum")
+                      ["aptos", "solana", "ethereum"].includes(account.chain)
+                        ? (account.chain as "aptos" | "solana" | "ethereum")
                         : undefined
                     }
                   />

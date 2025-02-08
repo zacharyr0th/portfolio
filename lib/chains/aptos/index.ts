@@ -2,7 +2,7 @@ import { chainInfo } from "../config";
 import { fetchAptosAccountResources } from "./utils";
 import { fetchTokenPrices } from "@/lib/data/cmc";
 import { AptosTokenBalance } from "./TokenBalance";
-import type { TokenBalance, TokenPrice } from "./types";
+import type { TokenPrice } from "./types";
 import type { ChainHandler } from "../types";
 import { BaseChainHandler } from "../baseHandler";
 import { logger } from "@/lib/utils/core/logger";
@@ -121,15 +121,15 @@ const aptosHandlerInstance = new BaseChainHandler({
       for (const symbol of uniqueSymbols) {
         if (prices?.[symbol]) {
           tokenPrices[symbol] = {
-            price: prices[symbol].price || 0,
-            priceChange24h: prices[symbol].percent_change_24h || 0,
+            price: prices?.[symbol]?.price ?? 0,
+            priceChange24h: prices?.[symbol]?.percent_change_24h ?? 0,
           };
         } else {
           // For STAPT, use APT price
           if (symbol === "STAPT" && prices?.["APT"]) {
             tokenPrices[symbol] = {
-              price: prices["APT"].price || 0,
-              priceChange24h: prices["APT"].percent_change_24h || 0,
+              price: prices?.["APT"]?.price ?? 0,
+              priceChange24h: prices?.["APT"]?.percent_change_24h ?? 0,
             };
           } else {
             tokenPrices[symbol] = DEFAULT_PRICE;

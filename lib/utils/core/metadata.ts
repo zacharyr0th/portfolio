@@ -1,6 +1,6 @@
-import type { Metadata } from 'next'
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: 'Portfolio',
-    description: 'Portfolio tracker',
-}
+  title: "Portfolio",
+  description: "Portfolio tracker",
+};

@@ -3,72 +3,161 @@ import { logger } from "@/lib/utils/core/logger";
 import { TOKEN_SYMBOL_MAP, RPC_ENDPOINTS } from "./constants";
 import { chainInfo } from "../config";
 
-// Get RPC URL with fallback mechanism
+// RPC configuration
+const RPC_CONFIG = {
+  HEALTH_CHECK_TIMEOUT: 5000,
+  REQUEST_TIMEOUT: 10000,
+  MAX_RETRIES: 3,
+  RETRY_DELAY: 2000,
+  CACHE_TTL: 5 * 60 * 1000, // 5 minutes
+} as const;
+
+// RPC cache
+interface RpcCache {
+  url: string;
+  timestamp: number;
+  health: boolean;
+}
+
+const rpcCache = new Map<string, RpcCache>();
+
+// Get RPC URL with fallback mechanism and caching
 async function getWorkingRpcUrl(): Promise<string> {
+  const now = Date.now();
+
+  // Check cache first
+  for (const [url, cache] of rpcCache.entries()) {
+    if (now - cache.timestamp < RPC_CONFIG.CACHE_TTL && cache.health) {
+      return url;
+    }
+  }
+
+  // Helper function to check RPC health
+  async function checkRpcHealth(url: string): Promise<boolean> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        RPC_CONFIG.HEALTH_CHECK_TIMEOUT,
+      );
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      return response.ok;
+    } catch (err) {
+      return false;
+    }
+  }
+
   // Try configured RPC first
   const configuredRpc = chainInfo.aptos.rpcEndpoint;
   if (configuredRpc) {
-    try {
-      // Use root endpoint for health check
-      const response = await fetch(`${configuredRpc}`);
-      if (response.ok) {
-        return configuredRpc;
-      }
-    } catch (err) {
-      logger.warn(
-        `Configured RPC ${configuredRpc} is not responding, trying fallbacks`,
-      );
+    const isHealthy = await checkRpcHealth(configuredRpc);
+    rpcCache.set(configuredRpc, {
+      url: configuredRpc,
+      timestamp: now,
+      health: isHealthy,
+    });
+
+    if (isHealthy) {
+      return configuredRpc;
     }
+    logger.warn(
+      `Configured RPC ${configuredRpc} is not responding, trying fallbacks`,
+    );
   }
 
   // Try fallback RPCs
   for (const rpc of RPC_ENDPOINTS) {
-    try {
-      // Use root endpoint for health check
-      const response = await fetch(`${rpc}`);
-      if (response.ok) {
-        return rpc;
-      }
-    } catch (err) {
-      logger.warn(`Fallback RPC ${rpc} is not responding`);
+    const isHealthy = await checkRpcHealth(rpc);
+    rpcCache.set(rpc, { url: rpc, timestamp: now, health: isHealthy });
+
+    if (isHealthy) {
+      return rpc;
     }
+    logger.warn(`Fallback RPC ${rpc} is not responding`);
   }
 
   throw new Error("No working RPC endpoint found");
 }
 
-// Known token decimals
-const TOKEN_DECIMALS: Record<string, number> = {
+// Known token decimals with validation
+const TOKEN_DECIMALS: Readonly<Record<string, number>> = Object.freeze({
   APT: 8,
   USDC: 6,
   USDT: 6,
   WETH: 8,
   WBTC: 8,
-};
+});
 
-// Update the RPC request function
+// Validate and normalize RPC response
+function validateRpcResponse(response: unknown): boolean {
+  if (!response || typeof response !== "object") {
+    return false;
+  }
+  // Add more validation as needed
+  return true;
+}
+
+// Update the RPC request function with retries and timeouts
 async function makeRpcRequest<T>(
   endpoint: string,
   params: any = {},
 ): Promise<T> {
-  const response = await fetch("/api/aptos", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ endpoint, params }),
-  });
+  let retries = RPC_CONFIG.MAX_RETRIES as number;
 
-  if (!response.ok) {
-    throw new Error(`Aptos API error: ${response.status}`);
+  while (retries > -1) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        RPC_CONFIG.REQUEST_TIMEOUT,
+      );
+
+      const response = await fetch("/api/aptos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          endpoint,
+          ...params,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`RPC request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!validateRpcResponse(data)) {
+        throw new Error("Invalid RPC response format");
+      }
+
+      return data as T;
+    } catch (error) {
+      if (retries === 0) {
+        throw error;
+      }
+
+      logger.warn(
+        `RPC request failed, retrying... (${RPC_CONFIG.MAX_RETRIES - retries + 1}/${RPC_CONFIG.MAX_RETRIES})`,
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, RPC_CONFIG.RETRY_DELAY),
+      );
+      retries--;
+    }
   }
 
-  const data = await response.json();
-  if (data.error) {
-    throw new Error(
-      `Aptos RPC error: ${data.error.message || JSON.stringify(data.error)}`,
-    );
-  }
-
-  return data;
+  throw new Error("RPC request failed after all retries");
 }
 
 interface AptosResource {

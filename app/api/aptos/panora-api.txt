@@ -1,0 +1,2063 @@
+The Panora Price API provides real-time price data for tokens on the Aptos chain, making it easy for developers to integrate accurate pricing information into their dApps.
+
+Key Features
+Real-Time Price Feeds: Get up-to-date token prices for accurate trading and analysis.
+
+Wide Token Coverage: Supports all tokens tradable on the Aptos mainnet network.
+
+Accessing the Token Prices
+The Token Prices can be accessed through the public API endpoint
+
+Public API Key:
+
+Copy
+a4^KV_EaTf4MW#ZdvgGKX#HUD^3IFEAOV_kzpIE^3BQGA8pDnrkT7JcIy#HNlLGi
+Note: For large-scale public applications, please submit a ticket on Discord to request a dedicated API key for enhanced performance and reliability.
+
+API Usage Example:
+
+GET https://api.panora.exchange/prices
+
+Copy
+const end_point = "https://api.panora.exchange/prices"
+
+const query = {
+  tokenAddress: "0x1::aptos_coin::AptosCoin",
+}
+
+const headers = {
+  "x-api-key":
+    "a4^KV_EaTf4MW#ZdvgGKX#HUD^3IFEAOV_kzpIE^3BQGA8pDnrkT7JcIy#HNlLGi",
+}
+
+const queryString = new URLSearchParams(query)
+const url = `${end_point}?${queryString}`
+
+const response = await(
+  await fetch(url, {
+    method: "GET",
+    headers: headers,
+  })
+).json()
+Query Parameter
+chainId (string, optional): The chain ID associated with the token (Default: 1 for Aptos Mainnet).
+
+tokenAddress (string, optional): Comma-separated list of coin (legacy) and / or FA addresses. The API returns the price information for the specified tokens. If not provided, the query will return prices of all tokens having liquidity above a nominal threshold.
+
+Token Price Response
+
+The response object contains the following fields:
+
+chainId: The chain ID associated with the token (Default: 1 for Aptos Mainnet)
+
+tokenAddress: The complete address of the token as per the Aptos Coin Standard (Legacy)
+
+faAddress: The complete address of the token as per the Aptos Fungible Asset (FA) Standard
+
+name: The on-chain registered name of the token
+
+symbol: The on-chain registered symbol of the token
+
+decimals: The number of decimal places of the token
+
+usdPrice: The latest usd price of the token
+
+Example Response
+
+Copy
+{
+    "chainId": 1,
+    "tokenAddress": "0x1::aptos_coin::AptosCoin",
+    "faAddress": "0xa",
+    "name": "Aptos Coin",
+    "symbol": "APT",
+    "decimals": 8,
+    "usdPrice": "10.2550984"
+ }
+
+ Attribution
+Kindly include proper attribution when using the API in projects or presentations. Mention “Powered by Panora” wherever applicable.
+
+Explore authentication, endpoints, and trading operations to start trading efficiently. Whether you're a developer or a trader, this guide has everything you need to get started with Panora's APIs.
+
+1. Get transaction details for the swap
+POST https://api.panora.exchange/swap
+
+Headers
+Public API Key:
+
+Copy
+a4^KV_EaTf4MW#ZdvgGKX#HUD^3IFEAOV_kzpIE^3BQGA8pDnrkT7JcIy#HNlLGi
+Note: For large-scale public applications, please submit a ticket on Discord to request a dedicated API key for enhanced performance and reliability.
+
+Name
+Value
+Description
+x-api-key
+
+Your API Key
+
+Use the public API key or enter the API key provided by Panora
+
+Query Parameters
+Note: Panora's APIs supports the following.
+
+ExactIn Swap: When fromTokenAmount is entered, the endpoint returns the maximum  toTokenAmount that will be received. Example: If the fromToken is APT, fromTokenAmount is 10.5 and toToken is lzUSDC, then the toTokenAmount response is the maximum lzUSDC a user would receive for swapping from 10.5 APT.
+
+ExactOut Swap: When toTokenAmount is entered, the endpoint returns the minimum fromTokenAmount that has to be paid. Example: If the toToken is lzUSDC, toTokenAmount is 100 and fromToken is APT, then the fromTokenAmount response is the minimum APT a user would pay for swapping to 100 lzUSDC.
+
+Parameter
+Required
+Type
+Description
+chainId
+
+no
+
+number
+
+ID for the chain for which the endpoint is being invoked. 
+
+Note: Default chainID is 1 for Aptos Mainnet
+
+fromTokenAddress
+
+yes
+
+string
+
+Address of the token being swapped from
+
+Example: If you want to swap 10.5 APT to lzUSDC, then fromTokenAddress is 0x1::aptos_coin::AptosCoin
+
+toTokenAddress
+
+yes
+
+string
+
+Address of the token being swapped to
+
+Example: If you want to swap 10.5 APT to lzUSDC, then toTokenAddress is 0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC
+
+fromTokenAmount
+
+yes*
+
+number
+
+Amount of the token being swapped from. Please set the amount without Token decimals
+
+Example: If you want to swap 10.5 APT to lzUSDC, then fromTokenAmount is 10.5
+
+toTokenAmount
+
+yes*
+
+number
+
+Amount of the token being swapped to. Please set the amount without Token decimals 
+
+Example: If you want to swap from APT to 100 lzUSDC, then toTokenAmount is 100
+
+toWalletAddress
+
+yes
+
+string
+
+Address of the wallet to which the swapped tokens will be sent
+
+slippagePercentage
+
+no
+
+number
+
+Slippage tolerance as 'auto' (which lets Panora choose the optimal slippage for the transaction, up to a maximum of 5%) or a percentage value.
+
+Example: For 3% slippage tolerance, set the value as 3. This can be set as 0.1, 0.5, 1.0 or any custom slippage percentage between 0 and 100.
+
+
+Note: If nothing is entered, slippage tolerance will be set to auto by default. If a numeric value is entered, anything after one decimal place will be truncated.
+
+integratorFeePercentage
+
+no
+
+number
+
+Integrator fee as a percentage value
+
+Example: For 2% integrator fee, set the value as 2. This can be set as 0.1, 0.5, 1.0 or any custom integrator fee between 0 and 2.
+
+
+Note: Fee sharing applicable. If nothing is entered, integrator fee will be set to 0 by default. If a numeric value is entered, anything after one decimal place will be truncated.
+
+integratorFeeAddress
+
+no
+
+string
+
+Wallet Address where integrators want to receive their fee share. 
+
+Note: Ensure it starts with 0x followed by 64 characters
+
+includeSources
+
+no
+
+string
+
+List of liquidity sources to be included for route calculation. 
+
+Example: ["ThalaSwapV2", "Liquidswap"]
+
+Note: If nothing is entered, all available sources are included by default.
+
+excludeSources
+
+no
+
+string
+
+List of liquidity sources to be excluded from the route. 
+
+Example: ["Aux"]
+
+Note: If nothing is entered, none of the sources will be excluded by default.
+
+onlyDirectRoutes
+
+no
+
+boolean
+
+Set to true to restrict to direct routes without intermediate hops or splits. 
+
+Example: For direct swaps without hops or splits, set to true. Default is false.
+
+*Please send either fromTokenAmount or toTokenAmount at a time.
+
+Request Example
+Javascript
+Python
+Go
+Curl
+Copy
+//CALL THE BELOW FUNCTION WITH THE ASYNC
+const end_point = 'https://api.panora.exchange/swap'
+const query = {
+    fromTokenAddress:
+    toTokenAddress:
+    fromTokenAmount:
+    toWalletAddress:
+};
+
+const headers = {
+    "x-api-key": "Your API key"
+};
+
+const queryString = new URLSearchParams(query).toString();
+const url = `${end_point}?${queryString}`;
+
+const response = await (
+    await fetch(url, {
+        method: 'POST',
+        headers: headers
+    })
+).json();
+Response Parameters
+Scenario 1: For ExactIn Swap where fromTokenAmount is entered (instead of toTokenAmount), the endpoint returns the maximum toTokenAmount
+Name
+Type
+Description
+fromToken
+
+object
+
+An object containing the details of the fromToken, which includes address and current_price
+
+toToken
+
+object
+
+An object containing the details of the toToken, which includes address and current_price 
+
+fromTokenAmount
+
+string
+
+Amount of token being swapped from
+
+Note: Amount is without Token decimals
+
+fromTokenAmountUSD
+
+string
+
+USD equivalent of fromTokenAmount
+
+Note: Will be null for those tokens whose usd price is not available from external price feeds 
+
+quotes
+
+array
+
+An array of objects containing the swap details, in the decreasing order of toTokenAmount. Each object consists of:
+
+
+toTokenAmount:  Amount of the tokens (without Token decimals) being swapped to. 
+
+
+minToTokenAmount:  Minimum amount of tokens (without Token decimals) user would receive after reducing slippage. 
+
+route:  Route details of the swap
+
+
+priceImpact: percentage difference between USD price of fromTokenAmount and toTokenAmount. Will be null if either fromTokenAmountUSD or toTokenAmountUSD is null
+
+
+feeAmount: Platform fee for the transaction
+
+
+slippagePercentage: Percentage of slippage tolerance
+
+
+txData: Details of the transaction for the swap
+
+toTokenAmountUSD: USD equivalent of toTokenAmount. Will be null for those tokens whose usd price is not available from external price feeds
+
+Note: Values are of type string
+
+status Code
+
+200:  Successful response
+400: Bad Request
+
+401: Unauthorized (in case no/wrong API key is passed)
+
+404: Not Found
+
+429: Too  many requests (in case of rate limit breach)
+500: Internal Server Error (when the Panora server is down)
+
+Scenario 2: For ExactOut Swap where toTokenAmount is entered (instead of fromTokenAmount), the endpoint returns the minimum toTokenAmount
+Name
+Type
+Description
+fromToken
+
+object
+
+An object containing the details of the fromToken, which includes address and current_price
+
+toToken
+
+object
+
+An object containing the details of the toToken, which includes address and current_price 
+
+toTokenAmount
+
+string
+
+Amount of token user desires to get after the swap
+
+Note: Amount is without Token decimals
+
+toTokenAmountUSD
+
+string
+
+USD equivalent of toTokenAmount. 
+
+Note: Will be null for those tokens whose usd price is not available from external price feeds 
+
+quotes
+
+array
+
+An array of objects  containing the swap details, in the increasing order of fromTokenAmount
+
+fromTokenAmount:  Amount of tokens (without Token decimals) user needs to pay for the swap
+
+maxFromTokenAmount: Maximum amount of tokens (without Token decimals) user would need to pay after adding slippage. 
+
+route: Route details of the swap
+
+
+priceImpact:  percentage difference between USD price of fromTokenAmount and toTokenAmount. Will be null if either fromTokenAmountUSD or toTokenAmountUSD is null 
+
+
+feeAmount:  Platform fee for the transaction
+
+
+slippagePercentage:  Percentage of slippage tolerance
+
+
+txData: Details of the transaction for the swap
+
+fromTokenAmountUSD: USD equivalent of fromTokenAmount. Will be null for those tokens whose usd price is not available from external price feeds
+
+Note: Values are of type string 
+
+status code
+
+200:  Successful response
+400: Bad Request
+
+401: Unauthorized (in case no/wrong API key is passed)
+
+404: Not Found
+
+429: Too  many requests (in case of rate limit breach)
+500: Internal Server Error (when the Panora server is down)
+
+2. Get quote for the swap
+GET https://api.panora.exchange/swap/quote
+
+Headers
+Public API Key:
+
+Copy
+a4^KV_EaTf4MW#ZdvgGKX#HUD^3IFEAOV_kzpIE^3BQGA8pDnrkT7JcIy#HNlLGi
+Note: For large-scale apps, please raise a ticket on Discord for a dedicated key.
+
+Name
+Value
+Description
+x-api-key
+
+Your API Key
+
+Use the public API key or enter the API key provided by Panora
+
+Query Parameters
+Parameter
+Required
+Type
+Description
+chainId
+
+no
+
+number
+
+ID for the chain for which the endpoint is being invoked. 
+
+Note: Default chainID is 1 for Aptos Mainnet
+
+fromTokenAddress
+
+yes
+
+string
+
+Address of the token being swapped from
+
+Example: If you want to swap 10.5 APT to lzUSDC, then fromTokenAddress is 0x1::aptos_coin::AptosCoin
+
+toTokenAddress
+
+yes
+
+string
+
+Address of the token being swapped to
+
+Example: If you want to swap 10.5 APT to lzUSDC, then toTokenAddress is 0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC
+
+fromTokenAmount
+
+yes*
+
+number
+
+Amount of the token being swapped from. Please set the amount without Token decimals
+
+Example: If you want to swap 10.5 APT to lzUSDC, then fromTokenAmount is 10.5
+
+toTokenAmount
+
+yes*
+
+number
+
+Amount of the token being swapped to. Please set the amount without Token decimals
+
+slippagePercentage
+
+no
+
+number
+
+Slippage tolerance as 'auto' (which lets Panora choose the optimal slippage for the transaction, up to a maximum of 5%) or a percentage value.
+
+Example: For 3% slippage tolerance, set the value as 3. This can be set as 0.1, 0.5, 1.0 or any custom slippage percentage between 0 and 100.
+
+
+Note: If nothing is entered, slippage tolerance will be set to auto by default. If a numeric value is entered, anything after one decimal place will be truncated.
+
+integratorFeePercentage
+
+no
+
+number
+
+Integrator fee as a percentage value
+
+Example: For 2% integrator fee, set the value as 2. This can be set as 0.1, 0.5, 1.0 or any custom integrator fee between 0 and 2.
+
+
+Note: Fee sharing applicable. If nothing is entered, integrator fee will be set to 0 by default. If a numeric value is entered, anything after one decimal place will be truncated.
+
+integratorFeeAddress
+
+no
+
+string
+
+Wallet Address where integrators want to receive their fee share.
+
+Note: Ensure it starts with 0x followed by 64 characters
+
+includeSources
+
+no
+
+string
+
+List of liquidity sources to be included for route calculation.
+
+Example: ["ThalaSwapV2", "Liquidswap"]
+
+Note: If nothing is entered, all available sources are included by default.
+
+excludeSources
+
+no
+
+string
+
+List of liquidity sources to be excluded from the route.
+
+Example: ["Aux"]
+
+Note: If nothing is entered, none of the sources will be excluded by default.
+
+onlyDirectRoutes
+
+no
+
+boolean
+
+Set to true to restrict to direct routes without intermediate hops or splits.
+
+Example: For direct swaps without hops or splits, set to true. Default is false.
+
+*Please send either fromTokenAmount or toTokenAmount at a time.
+
+Request Example
+Javascript
+Python
+Go
+Curl
+Copy
+//CALL THE BELOW FUNCTION WITH THE ASYNC
+const end_point = 'https://api.panora.exchange/swap/quote'
+const query = {
+    fromTokenAddress:
+    toTokenAddress:
+    fromTokenAmount:
+};
+
+const headers = {
+    "x-api-key": "Your API key"
+};
+
+const queryString = new URLSearchParams(query).toString();
+const url = `${end_point}?${queryString}`;
+
+const response = await (
+    await fetch(url, {
+        method: 'GET',
+        headers: headers
+    })
+).json();
+Response Parameters
+Scenario 1:  For ExactIn Swap where fromTokenAmount is entered (instead of toTokenAmount), the endpoint returns the maximum toTokenAmount
+Name
+Type
+Description
+fromToken
+
+object
+
+An object containing the details of the fromToken, which includes addressand current_price
+
+toToken
+
+object
+
+An object containing the details of the toToken, which includes address and current_price 
+
+fromTokenAmount
+
+string
+
+Amount of token being swapped from
+
+Note: Amount is without Token decimals
+
+fromTokenAmountUSD
+
+string
+
+USD equivalent of fromTokenAmount
+
+Note: Will be null for those tokens whose usd price is not available from external price feeds 
+
+quotes
+
+array
+
+An array of objects containing the swap details, in the decreasing order of toTokenAmount. Each object consists of:
+
+
+toTokenAmount:  Amount of the tokens (without Token decimals) being swapped to. 
+
+
+minToTokenAmount:  Minimum amount of tokens (without Token decimals) user would receive after reducing slippage.  
+
+route : Route details of the swap
+
+
+priceImpact: percentage difference between USD price of fromTokenAmount and toTokenAmount. Will be null if either fromTokenAmountUSD or toTokenAmountUSD is null
+
+
+feeAmount: charges for the transaction
+
+
+slippagePercentage: Percentage of slippage tolerance
+
+toTokenAmountUSD: USD equivalent of toTokenAmount. Will be null for those tokens whose usd price is not available from external price feeds
+
+Note: Values are of type string
+
+status Code
+
+200:  Successful response
+400: Bad Request
+
+401: Unauthorized (in case no/wrong API key is passed)
+
+404: Not Found
+
+429: Too  many requests (in case of rate limit breach)
+500: Internal Server Error (when the Panora server is down)
+
+Scenario 2: For ExactOut Swap where toTokenAmount is entered (instead of fromTokenAmount), the endpoint returns the minimum fromTokenAmount
+Name
+Type
+Description
+fromToken
+
+object
+
+An object containing the details of the fromToken, which includes address and current_price
+
+toToken
+
+object
+
+An object containing the details of the toToken, which includes address and current_price 
+
+toTokenAmount
+
+string
+
+Amount of token user desires to get after the swap
+
+Note: Amount is without Token decimals
+
+toTokenAmountUSD
+
+string
+
+USD equivalent of toTokenAmount. 
+
+Note: Will be null for those tokens whose usd price is not available from external price feeds 
+
+quotes
+
+array
+
+An array of objects  containing the swap details, in the increasing order of fromTokenAmount
+
+fromTokenAmount:  Amount of tokens (without Token decimals) user needs to pay for the swap
+
+maxFromTokenAmount: Maximum amount of tokens (without Token decimals) user would need to pay after adding slippage. 
+
+route: Route details of the swap
+
+
+priceImpact:  percentage difference between USD price of fromTokenAmount and toTokenAmount. Will be null if either fromTokenAmountUSD or toTokenAmountUSD is null 
+
+
+feeAmount:  Platform fee for the transaction
+
+
+slippagePercentage:  Percentage of slippage tolerance
+
+fromTokenAmountUSD: USD equivalent of fromTokenAmount. Will be null for those tokens whose usd price is not available from external price feeds 
+
+Note: Values are of type string
+
+status code
+
+200:  Successful response
+400: Bad Request
+
+401: Unauthorized (in case no/wrong API key is passed)
+
+404: Not Found
+
+429: Too  many requests (in case of rate limit breach)
+500: Internal Server Error (when the Panora server is down)
+
+Examples
+Here you will some of the examples of the API integration
+
+The values and responses provided are solely for illustrative purposes and to aid in the understanding of requests and responses; actual values and responses may vary.
+
+1. ExactIn swap: Get Transaction Data for swap from lzUSDC to APT when fromTokenAmount is entered
+POST https://api.panora.exchange/swap
+
+Copy
+const end_point = 'https://api.panora.exchange/swap'
+const query = {
+    fromTokenAddress: "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+    toTokenAddress: "0x1::aptos_coin::AptosCoin",
+    toWalletAddress: "0x7b4ae66213a59a1bae10818347a826cb40d143bad45bd1460aeefd5bc4f52ce5",
+    fromTokenAmount: 100,
+};
+
+const headers = {
+    "x-api-key": "Your API key"
+};
+
+const queryString = new URLSearchParams(query).toString();
+const url = `${end_point}?${queryString}`;
+
+const response = await (
+    await fetch(url, {
+        method: 'POST',
+        headers: headers
+    })
+).json();
+Below is the response for the above request
+
+200
+400
+401
+404
+429
+500
+Copy
+//successfull response
+{
+    "fromToken": {
+        "address": "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+        "current_price": "0.999676"
+    },
+    "toToken": {
+        "address": "0x1::aptos_coin::AptosCoin",
+        "current_price": "6.74000000"
+    },
+    "fromTokenAmount": "100",
+    "fromTokenAmountUSD": "99.97",
+    "quotes": [
+        {
+            "toTokenAmount": "14.85992752",
+            "route": [
+                {
+                    "percentage": 100,
+                    "routeTaken": [
+                        [
+                            {
+                                "fromToken": {
+                                    "tokenType": "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+                                    "name": "USD Coin",
+                                    "symbol": "USDC",
+                                    "decimals": 6
+                                },
+                                "toToken": {
+                                    "tokenType": "0x1::aptos_coin::AptosCoin",
+                                    "name": "Aptos Coin",
+                                    "symbol": "APT",
+                                    "decimals": 8
+                                },
+                                "percentage": 100,
+                                "dexName": "Obric",
+                                "aggregatorName": "Panora"
+                            }
+                        ]
+                    ]
+                }
+            ],
+            "priceImpact": "0.19",
+            "slippagePercentage": "0",
+            "feeAmount": "0",
+            "minToTokenAmount": "14.85992752",
+            "txData": {
+                "function": "0x1c3206329806286fd2223647c9f9b130e66baeb6d7224a18c1f642ffe48f3b4c::panora_swap_aggregator::split_multi_step_split_route_exact_input_entry",
+                "type_arguments": [
+                    "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::string::String",
+                    "0x1::aptos_coin::AptosCoin"
+                ],
+                "arguments": [
+                    "0x7b4ae66213a59a1bae10818347a826cb40d143bad45bd1460aeefd5bc4f52ce5",
+                    1,
+                    [
+                        1
+                    ],
+                    [
+                        [
+                            12
+                        ]
+                    ],
+                    [
+                        [
+                            6
+                        ]
+                    ],
+                    [
+                        [
+                            false
+                        ]
+                    ],
+                    [
+                        []
+                    ],
+                    [
+                        []
+                    ],
+                    [
+                        []
+                    ],
+                    [
+                        []
+                    ],
+                    [
+                        []
+                    ],
+                    [
+                        []
+                    ],
+                    [
+                        [
+                            100
+                        ]
+                    ],
+                    [
+                        []
+                    ],
+                    [
+                        []
+                    ],
+                    "0x2ebb2ccac5e027a87fa0e2e5f656a3a4238d6a48d93ec9b610d570fc0aa0df12",
+                    [
+                        100000000
+                    ],
+                    1485992752,
+                    0,
+                    "0xd96748eaad3ccc6514d15554c8627a713d881912d5309bf84b6cfac47aaf797f"
+                ]
+            },
+            "toTokenAmountUSD": "100.16"
+        }
+    ]
+}
+This response can be sent to Aptos chain with the required signatures to execute the transaction. 
+
+2. ExactOut swap: Get transaction data for swap from lzUSDC to APT when toTokenAmount is entered
+POST https://api.panora.exchange/swap
+
+Copy
+const end_point = 'https://api.panora.exchange/swap'
+const query = {  
+    fromTokenAddress: "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+    toTokenAddress: "0x1::aptos_coin::AptosCoin",
+    toTokenAmount: 10.5,
+    toWalletAddress: "0x7b4ae66213a59a1bae10818347a826cb40d143bad45bd1460aeefd5bc4f52ce5",
+};
+
+const headers = {
+    "x-api-key": "Your API key"
+};
+
+const queryString = new URLSearchParams(query).toString();
+const url = `${end_point}?${queryString}`;
+
+const response = await (
+    await fetch(url, {
+        method: 'POST',
+        headers: headers
+    })
+).json();
+
+Note:  toTokenAmount here is amount (without Token Decimals) that the user desires to receive after the swap is executed
+
+Below is the response for the above request
+
+200
+400
+401
+404
+429
+500
+Copy
+//Successfull response
+{
+    "fromToken": {
+        "address": "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+        "current_price": "0.999676"
+    },
+    "toToken": {
+        "address": "0x1::aptos_coin::AptosCoin",
+        "current_price": "6.73000000"
+    },
+    "toTokenAmount": "10.5",
+    "toTokenAmountUSD": "70.665",
+    "quotes": [
+        {
+            "fromTokenAmount": 70.776334,
+            "route": [
+                {
+                    "percentage": 100,
+                    "routeTokens": [
+                        {
+                            "tokenType": "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+                            "name": "USD Coin",
+                            "symbol": "USDC",
+                            "decimals": 6
+                        },
+                        {
+                            "tokenType": "0x1::aptos_coin::AptosCoin",
+                            "name": "Aptos Coin",
+                            "symbol": "APT",
+                            "decimals": 8
+                        }
+                    ],
+                    "routeTaken": [
+                        [
+                            {
+                                "percentage": 100,
+                                "fromToken": {
+                                    "tokenType": "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+                                    "name": "USD Coin",
+                                    "symbol": "USDC",
+                                    "decimals": 6
+                                },
+                                "toToken": {
+                                    "tokenType": "0x1::aptos_coin::AptosCoin",
+                                    "name": "Aptos Coin",
+                                    "symbol": "APT",
+                                    "decimals": 8
+                                },
+                                "dexName": "Sushi",
+                                "aggregatorName": "Panora"
+                            }
+                        ]
+                    ]
+                }
+            ],
+            "slippagePercentage": 0,
+            "maxFromTokenAmount": 70.776334,
+            "feeAmount": 0,
+            "priceImpact": "-0.12",
+            "txData": {
+                "function": "0x1c3206329806286fd2223647c9f9b130e66baeb6d7224a18c1f642ffe48f3b4c::panora_swap_aggregator::one_step_route_output",
+                "type_arguments": [
+                    "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+                    "0x1::aptos_coin::AptosCoin",
+                    "u8"
+                ],
+                "arguments": [
+                    "0x7b4ae66213a59a1bae10818347a826cb40d143bad45bd1460aeefd5bc4f52ce5",
+                    20,
+                    "0",
+                    true,
+                    "70776334",
+                    0,
+                    "0xd96748eaad3ccc6514d15554c8627a713d881912d5309bf84b6cfac47aaf797f"
+                ]
+            },
+            "fromTokenAmountUSD": "70.75"
+        }
+    ]
+}
+This response can be sent to Aptos chain with the required signatures to execute the transaction. 
+
+3. ExactIn swap: Get Quote Data for swap from lzUSDC to APT when fromTokenAmount is entered
+GET https://api.panora.exchange/swap/quote
+
+Copy
+const end_point = 'https://api.panora.exchange/swap/quote'
+const query = {
+    fromTokenAddress: "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+    toTokenAddress: "0x1::aptos_coin::AptosCoin",
+    fromTokenAmount: 100,
+};
+
+const headers = {
+    "x-api-key": "Your API key"
+};
+
+const queryString = new URLSearchParams(query).toString();
+const url = `${end_point}?${queryString}`;
+
+const response = await (
+    await fetch(url, {
+        method: 'GET',
+        headers: headers
+    })
+).json();
+Below is the response for the above request
+
+200
+400
+401
+404
+429
+500
+Copy
+//Successfull response
+{
+    "fromToken": {
+        "address": "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+        "current_price": "0.999682"
+    },
+    "toToken": {
+        "address": "0x1::aptos_coin::AptosCoin",
+        "current_price": "6.73000000"
+    },
+    "fromTokenAmount": "100",
+    "fromTokenAmountUSD": "99.97",
+    "quotes": [
+        {
+            "toTokenAmount": "14.93620707",
+            "route": [
+                {
+                    "percentage": 100,
+                    "routeTaken": [
+                        [
+                            {
+                                "fromToken": {
+                                    "tokenType": "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+                                    "name": "USD Coin",
+                                    "symbol": "USDC",
+                                    "decimals": 6
+                                },
+                                "toToken": {
+                                    "tokenType": "0x1::aptos_coin::AptosCoin",
+                                    "name": "Aptos Coin",
+                                    "symbol": "APT",
+                                    "decimals": 8
+                                },
+                                "percentage": 100,
+                                "dexName": "Obric",
+                                "aggregatorName": "Panora"
+                            }
+                        ]
+                    ]
+                }
+            ],
+            "priceImpact": "0.55",
+            "slippagePercentage": "0",
+            "feeAmount": "0",
+            "minToTokenAmount": "14.93620707",
+            "toTokenAmountUSD": "100.52"
+        }
+    ]
+}
+4. ExactOut swap: Get Quote data for swap from lzUSDC to APT when toTokenAmount is entered
+GET https://api.panora.exchange/swap/quote
+
+Copy
+const query = {  
+    fromTokenAddress: "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+    toTokenAddress: "0x1::aptos_coin::AptosCoin",
+    toTokenAmount: 10.5
+};
+
+const headers = {
+    "x-api-key": "Your API key"
+};
+
+const queryString = new URLSearchParams(query).toString();
+const url = `${end_point}?${queryString}`;
+
+const response = await (
+    await fetch(url, {
+        method: 'GET',
+        headers: headers
+    })
+).json();
+Below is the response for the request.
+
+200
+400
+401
+404
+429
+500
+Copy
+//Successfull response
+{
+    "fromToken": {
+        "address": "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+        "current_price": "0.999682"
+    },
+    "toToken": {
+        "address": "0x1::aptos_coin::AptosCoin",
+        "current_price": "6.73000000"
+    },
+    "toTokenAmount": "10.5",
+    "toTokenAmountUSD": "70.665",
+    "quotes": [
+        {
+            "fromTokenAmount": 70.776336,
+            "route": [
+                {
+                    "percentage": 100,
+                    "routeTokens": [
+                        {
+                            "tokenType": "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+                            "name": "USD Coin",
+                            "symbol": "USDC",
+                            "decimals": 6
+                        },
+                        {
+                            "tokenType": "0x1::aptos_coin::AptosCoin",
+                            "name": "Aptos Coin",
+                            "symbol": "APT",
+                            "decimals": 8
+                        }
+                    ],
+                    "routeTaken": [
+                        [
+                            {
+                                "percentage": 100,
+                                "fromToken": {
+                                    "tokenType": "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+                                    "name": "USD Coin",
+                                    "symbol": "USDC",
+                                    "decimals": 6
+                                },
+                                "toToken": {
+                                    "tokenType": "0x1::aptos_coin::AptosCoin",
+                                    "name": "Aptos Coin",
+                                    "symbol": "APT",
+                                    "decimals": 8
+                                },
+                                "dexName": "Sushi",
+                                "aggregatorName": "Panora"
+                            }
+                        ]
+                    ]
+                }
+            ],
+            "slippagePercentage": 0,
+            "maxFromTokenAmount": 70.776336,
+            "feeAmount": 0,
+            "priceImpact": "-0.12",
+            "fromTokenAmountUSD": "70.75"
+        }
+    ]
+}
+
+A wrapper over the Panora API to provide functions to swap between any two tokens easily
+
+Installation
+Using npm
+
+Copy
+npm install @panoraexchange/swap-sdk
+Using yarn
+
+Copy
+yarn add @panoraexchange/swap-sdk
+Using pnpm
+
+Copy
+pnpm add @panoraexchange/swap-sdk
+Usage
+1. Initialize Panora SDK
+Copy
+import Panora, { PanoraConfig } from "@panoraexchange/swap-sdk"
+
+const config: PanoraConfig = {
+  apiKey: "YOUR API KEY",
+  rpcUrl: "CUSTOM RPC URL"
+}
+
+const client = new Panora(config)
+Public API Key:
+
+Copy
+a4^KV_EaTf4MW#ZdvgGKX#HUD^3IFEAOV_kzpIE^3BQGA8pDnrkT7JcIy#HNlLGi
+Note: For large-scale public applications, please submit a ticket on Discord to request a dedicated API key for enhanced performance and reliability.
+
+2. Swap Functions
+i.  ExactInSwap:
+Copy
+const exactInSwap = async () => {
+  const response = await client.Swap(
+    {
+      chainId: "1",
+      fromTokenAddress: "0x1::aptos_coin::AptosCoin",
+      toTokenAddress:
+        "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+      fromTokenAmount: "1",
+      toWalletAddress: "YOUR WALLET ADDRESS",
+      slippagePercentage: "1",
+      integratorFeeAddress: "INTEGRATOR FEE WALLET ADDRESS",
+      integratorFeePercentage: "1",
+    },
+    "YOUR PRIVATE KEY"
+  )
+}
+ii. ExactOutSwap:
+Copy
+const exactOutSwap = async () => {
+  const response = await client.Swap(
+    {
+      chainId: "1",
+      fromTokenAddress: "0x1::aptos_coin::AptosCoin",
+      toTokenAddress:
+        "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+      toTokenAmount: "12",
+      toWalletAddress: "YOUR WALLET ADDRESS",
+      slippagePercentage: "1",
+      integratorFeeAddress: "INTEGRATOR FEE WALLET ADDRESS",
+      integratorFeePercentage: "1",
+    },
+    "YOUR PRIVATE KEY"
+  )
+}
+iii. BatchSwap:
+Copy
+const exactInSwapBatch = async () => {
+  const response = await client.BatchSwap(
+    [
+      {
+        chainId: "1",
+        fromTokenAddress: "0x1::aptos_coin::AptosCoin",
+        toTokenAddress:
+          "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+        fromTokenAmount: "1",
+        toWalletAddress: "YOUR WALLET ADDRESS",
+        slippagePercentage: "1",
+        integratorFeeAddress: "INTEGRATOR FEE WALLET ADDRESS",
+        integratorFeePercentage: "1",
+      },
+      {
+        chainId: "1",
+        fromTokenAddress: "0x1::aptos_coin::AptosCoin",
+        toTokenAddress:
+          "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+        toTokenAmount: "1",
+        toWalletAddress: "YOUR WALLET ADDRESS",
+        slippagePercentage: "1",
+        integratorFeeAddress: "INTEGRATOR FEE ADDRESS",
+        integratorFeePercentage: "1",
+      },
+    ],
+    "YOUR PRIVATE KEY"
+  )
+}
+3. Quote Functions
+i. ExactInSwapQuote
+Copy
+const exactInSwapQuote = async () => {
+  const response = await client.SwapQuote({
+    chainId: "1",
+    fromTokenAddress: "0x1::aptos_coin::AptosCoin",
+    toTokenAddress:
+      "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+    fromTokenAmount: "1",
+    toWalletAddress: "YOUR WALLET ADDRESS",
+    slippagePercentage: "1",
+    integratorFeeAddress: "INTEGRATOR FEE WALLET ADDRESS",
+    integratorFeePercentage: "1",
+    // "rawTransaction" | "transactionPayload" depending on the use case
+    getTransactionData: "rawTransaction"
+  })
+}
+ii. ExactOutSwapQuote
+Copy
+const exactOutSwapQuote = async () => {
+  const response = await client.SwapQuote({
+    chainId: "1",
+    fromTokenAddress: "0x1::aptos_coin::AptosCoin",
+    toTokenAddress:
+      "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC",
+    toTokenAmount: "1",
+    toWalletAddress: "YOUR WALLET ADDRESS",
+    slippagePercentage: "1",
+    integratorFeeAddress: "INTEGRATOR FEE WALLET ADDRESS",
+    integratorFeePercentage: "1",
+  })
+}
+Attribution
+Kindly include proper attribution when using the API in projects or presentations. Mention “Powered by Panora” wherever applicable.
+
+💦
+Supported Sources
+Panora currently supports the below mentioned liquidity sources on Aptos mainnet.
+
+ThalaSwapV1
+
+ThalaSwapV2
+
+Liquidswap
+
+Econia
+
+Cellana
+
+PancakeSwap
+
+Emojicoin
+
+Sushiswap
+
+Thetis
+
+ThalaLSD
+
+AmnisLSD
+
+Redemption
+
+BaptSwap
+
+MovePump
+
+AnimeSwap
+
+Aptoswap
+
+Cetus
+
+Aux
+
+Learn how to embed the Panora iframe on your website step-by-step in just a few minutes.
+
+Panora can be seamlessly embedded within other websites as an iframe, offering the full Panora frontend experience along with custom prefilled settings.
+
+An iframe integration ensures your site automatically reflects updates or enhancements made to Panora. After the initial setup, no extra work is needed to keep up with ongoing changes.
+
+
+URL format:
+Copy
+https://app.panora.exchange/swap/aptos?pair=APT-USDt&fromTokenAmount=1&feePercentage=1&feeWalletAddress=value
+Copy
+https://app.panora.exchange/swap/aptos?pair=0xa-0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b&fromTokenAmount=1&feePercentage=1&feeWalletAddress=value
+Parameters
+Params
+Required
+Description
+Default
+pair
+
+no
+
+From and To token symbol (or token address), separated by '-'
+
+APT-USDt
+
+fromTokenAmount
+
+no
+
+Default from token amount for the swap
+
+none
+
+toTokenAmount
+
+no
+
+Default to token amount for the swap
+
+none
+
+feePercentage
+
+no
+
+Fee amount percentage to be collected (0.1% - 5%)
+
+none
+
+feeWalletAddress
+
+no
+
+Fee receiver wallet address
+
+none
+
+Adding the iframe to your site 
+Sample code:
+
+Copy
+<iframe
+  style={{ margin: 'auto' }}
+  width="450px"
+  height="700px"
+  src="https://app.panora.exchange/swap/aptos?pair=APT-USDt&fromTokenAmount=1&feePercentage=1&feeWalletAddress=value"
+  />
+Attribution
+Kindly include proper attribution when using Panora in projects or presentations. Mention “Powered by Panora” wherever applicable.
+
+The Panora Token List is a comprehensive, community-driven collection of tokens. It is designed to provide accurate information and eliminate confusion between similar-looking tokens, providing users with confidence and clarity while trading.
+
+Panora Tags
+To enhance token classification and identification, we’ve introduced a field `panoraTags` in token list response. This field combines categories and labels into a single parameter, providing clearer insights and context about each token's status and characteristics. Here’s what they represent:
+
+Categories (Tokens are segregated on Panora UI based on their category):
+
+Native: Tokens that are native to the chain and issued directly on it (excludes emojicoin and meme)
+
+Emojicoin: Tokens launched on emojicoin.fun (includes both graduated and non-graduated emojicoins)
+
+Meme: Tokens primarily driven by community hype, memes, or trends
+
+Bridged: Tokens that originate from another chain and are bridged for use
+
+Labels:
+
+Verified
+Tokens with verified logo-to-address mapping to prevent confusion with similar tokens and meet nominal threshold metrics are eligible for Verified label. Verification focuses solely on ensuring accurate identification and does not imply endorsement, financial advice, or guarantee visibility on the Panora UI. 
+
+
+Verification and Visibility: 
+While we do not currently enforce strict verification metrics criteria, we monitor several key metrics to assess a token's label and/or its visibility on the Panora UI. These metrics are subject to changes and include, but are not limited to, liquidity, market cap, daily trading volume, total holder count, % of supply held by the top 10 holders, and stability of these metrics over a period of time.
+
+Verification Process:
+Projects can apply for the Verified label by submitting a Pull Request (PR) on the Panora Token List GitHub repo and posting an attestation tweet from their official X (Twitter) account. See the following page for a detailed step-by-step guide. 
+
+Note: 
+
+Not all projects may receive Verified status immediately and may remain as Recognized or Unverified after community review. Additionally, Verified label and/or default visibility of any token on Panora UI may be revoked due to factors such as updated verification criteria, community concerns or lack of transparency from the token project's development team, instability or significant drops in key metrics over a period of time. This is solely to protect the community and you are welcome to re-apply and re-tweet once your project gains more traction and community support. Projects within private Aptos Ecosystem Telegram groups or recognized by other Aptos Ecosystem projects and community members are prioritized for faster verification. 
+
+Emojicoins launched on emojicoin.fun are currently not assigned any labels. All graduated emojicoins are automatically set as panoraUI = true.
+
+Recognized
+Tokens that have logo-to-address mapping, but may not be tradable or recognized by the community yet, or have had their verified label revoked. Recognized tokens might also include niche or new tokens that are still in the early stages of establishing community support or demonstrating stability. 
+
+
+Unverified
+Tokens that have not yet undergone the verification process but meet the minimum nominal liquidity requirements and have unique metadata. These tokens may or may not be recognized by the community and are hidden by default in the Panora UI. Unverified status is common for new or recently launched tokens and users can choose to trade these tokens at their own discretion. 
+
+
+Banned
+Tokens that are restricted due to confirmed malicious behavior or security risks. It is recommended to avoid trading these assets.
+
+
+InternalFA
+Addresses created by certain DEX's before the pairing between Coin and Fungible Asset (FA) standard tokens were established. These may have unique behaviors or limitations.
+
+
+LP (Liquidity Pool)
+Tokens that represent liquidity pool shares after adding liquidity in trading pairs, indicating the proportion of assets held within a liquidity pool.
+
+Important Reminder: Tokens don’t need to have a Verified or Recognized label to be tradable. All tokens are automatically and instantly available for trading on Panora and all of its integrator partners and can be accessed by using the complete token address.
+
+Tokens Visible on Panora UI
+By default, only tokens marked as panoraUI = true are displayed on the Panora UI, along with any other tokens held in the user's wallet, ensuring easy access to owned assets. However, all tokens available on-chain are searchable on Panora UI by name, symbol, emoji, or address.
+
+Accessing the Panora token list
+The Panora Token List can be accessed via the Token List GitHub Repository or through the public API endpoint 
+
+Public API Key:
+
+Copy
+a4^KV_EaTf4MW#ZdvgGKX#HUD^3IFEAOV_kzpIE^3BQGA8pDnrkT7JcIy#HNlLGi
+Note: For large-scale public applications, please submit a ticket on Discord to request a dedicated API key for enhanced performance and reliability.
+
+API Usage Example: 
+
+GET https://api.panora.exchange/tokenlist
+
+Copy
+const end_point = "https://api.panora.exchange/tokenlist"
+
+const query = {
+  isInPanoraTokenList: "true",
+}
+
+const headers = {
+  "x-api-key":
+    "a4^KV_EaTf4MW#ZdvgGKX#HUD^3IFEAOV_kzpIE^3BQGA8pDnrkT7JcIy#HNlLGi",
+}
+
+const queryString = new URLSearchParams(query)
+const url = `${end_point}?${queryString}`
+
+const response = await(
+  await fetch(url, {
+    method: "GET",
+    headers: headers,
+  })
+).json()
+Query Parameters
+
+chainId (string, optional): The chain ID associated with the token (Default: 1 for Aptos Mainnet).
+
+tokenAddress (string, optional): Comma-separated list of coin (legacy) and/or FA addresses. The API returns the details for the specified tokens. If not provided, the query will return details of all tokens marked as panoraUI = true.
+
+panoraUI (boolean, optional): If set to true, only tokens that are visible on the Panora UI are returned. Set as true, false to get all tokens in the list. Default is true.
+
+panoraTags (string, optional): Returns tokens based on their associated tags. All available tags are listed under the 'Panora Tags' section at the start of this page.
+
+Aptos Token List Response
+The response object contains the following fields:
+
+chainId: The chain ID associated with the token (Default: 1 for Aptos Mainnet)
+
+tokenAddress: The complete address of the token as per the Aptos Coin Standard (Legacy)
+
+faAddress: The complete address of the token as per the Aptos Fungible Asset (FA) Standard
+
+name: The on-chain registered name of the token
+
+symbol: The on-chain registered symbol of the token
+
+decimals: The number of decimal places of the token
+
+bridge: The bridge associated with the token, if applicable (optional)
+
+panoraSymbol: Similar to symbol, but with prefixes based on the bridge: lz for LayerZero, wh for Wormhole, and ce for Celer
+
+logoUrl: The URL for the token’s logo(optional)
+
+websiteUrl: The official website URL of the token (optional)
+
+panoraUI: When set to true, displays the token name and logo on the Panora interface.
+
+panoraTags: Lists the tags associated with the token.
+
+panoraIndex: The default sorting order of tokens within the Panora UI
+
+coinGeckoId: The CoinGecko ID of the token (optional)
+
+coinMarketCapId: The CoinMarketCap ID of the token (optional)
+
+Example Response:
+
+Copy
+   {
+      "chainId": 1,
+      "tokenAddress": null,
+      "faAddress": "0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b",
+      "name": "Tether USD",
+      "symbol": "USDt",
+      "decimals": 6,
+      "bridge": null,
+      "panoraSymbol": "USDt",
+      "usdPrice": "1.00377379",
+      "logoUrl": "https://raw.githubusercontent.com/PanoraExchange/Aptos-Tokens/main/logos/USDT.svg",
+      "websiteUrl": "https://tether.to",
+      "panoraUI": true,
+      "panoraTags": [
+        "Native",
+        "Verified"
+      ],
+      "panoraIndex": 2,
+      "coinGeckoId": "tether",
+      "coinMarketCapId": 825,
+      "isInPanoraTokenList": true, //Do not use. This field will get deprecated.
+      "isBanned": false //Do not use. This field will get deprecated.
+    }
+Attribution
+Kindly include proper attribution when using the API in projects or presentations. Mention “Powered by Panora” wherever applicable.
+
+Feedback 
+The Panora Token List is continuously evolving, and we welcome feedback and suggestions from users, community members, and protocols to help refine and enhance it for the entire ecosystem. We may add any requirements and remove some over time, based on the learnings and feedback from the community. If you have any suggestions, then reach out to us!!
+
+📔
+How to Add Your Token to the Panora Token List
+Follow these steps to get your token verified and visible on Panora frontend, Aptos Explorer, Petra Wallet and all of Panora's integrator partners:
+
+Fork the Repository
+Start by forking the Panora Aptos-Tokens GitHub repo.
+
+
+Add Token Icon
+In your forked repository, upload the token’s icon file (token_symbol.svg) to the logos folder. Ensure it's ~100x100 pixels in .png format and has a unique symbol not used by any existing token.
+
+
+Add Token Information
+At the end of the submit-token-request.ts file, add a SubmitTokenRequestInfo object with the following details:
+
+SubmitTokenRequestInfo
+
+chainId: The chain ID to which the token belongs (default is 1 for Mainnet)
+
+tokenAddress: The complete address of the token as per the Aptos Coin Standard (Legacy)
+
+faAddress: The complete address of the token as per the Aptos Fungible Asset (FA) Standard
+
+name: The on-chain registered name of the token
+
+symbol: The on-chain registered symbol of the token
+
+decimals: The number of decimal places of the token
+
+logoUrl: The URL of the token’s logo (add it to the logos folder first to get the correct URL)
+
+websiteUrl: The official website URL of the token (optional but recommended)
+
+coinGeckoId: The CoinGecko ID of the token (optional)
+
+coinMarketCapId: The CoinMarketCap ID of the token (optional)
+
+Example: 
+
+Copy
+  {
+    "chainId": 1,
+    "tokenAddress": "0x1::aptos_coin::AptosCoin",
+    "faAddress": "0xa",
+    "name": "Aptos Coin",
+    "symbol": "APT",
+    "decimals": 8,
+    "logoUrl": "https://raw.githubusercontent.com/PanoraExchange/Aptos-Tokens/main/logos/APT.svg",
+    "websiteUrl": "https://aptosfoundation.org",
+    "coinGeckoId": "aptos",
+    "coinMarketCapId": 21794,
+  }
+Commit Changes
+Save and commit your changes with a clear and descriptive message explaining the modifications.
+
+
+Create a Pull Request
+Navigate to your forked repository, open a pull request, and submit it for review. Make sure to select the base repository as Aptos-Tokens and branch as main for merging your changes.
+
+
+Attestation tweet 
+Post an attestation tweet from your official X (Twitter) account to complete the verification steps. Be sure to tag @PanoraExchange in your tweet to notify both your community and Panora of your request. 
+
+
+Important Reminder: Tokens don’t need to have a Verified or Recognized label to be tradable. All tokens are automatically and instantly available for trading on Panora and all of its integrator partners and can be accessed by using the complete token address.
+
+Token Prices
+The Panora Price API provides real-time price data for tokens on the Aptos chain, making it easy for developers to integrate accurate pricing information into their dApps.
+
+Key Features
+Real-Time Price Feeds: Get up-to-date token prices for accurate trading and analysis.
+
+Wide Token Coverage: Supports all tokens tradable on the Aptos mainnet network.
+
+Accessing the Token Prices
+The Token Prices can be accessed through the public API endpoint
+
+Public API Key:
+
+Copy
+a4^KV_EaTf4MW#ZdvgGKX#HUD^3IFEAOV_kzpIE^3BQGA8pDnrkT7JcIy#HNlLGi
+Note: For large-scale public applications, please submit a ticket on Discord to request a dedicated API key for enhanced performance and reliability.
+
+API Usage Example:
+
+GET https://api.panora.exchange/prices
+
+Copy
+const end_point = "https://api.panora.exchange/prices"
+
+const query = {
+  tokenAddress: "0x1::aptos_coin::AptosCoin",
+}
+
+const headers = {
+  "x-api-key":
+    "a4^KV_EaTf4MW#ZdvgGKX#HUD^3IFEAOV_kzpIE^3BQGA8pDnrkT7JcIy#HNlLGi",
+}
+
+const queryString = new URLSearchParams(query)
+const url = `${end_point}?${queryString}`
+
+const response = await(
+  await fetch(url, {
+    method: "GET",
+    headers: headers,
+  })
+).json()
+Query Parameter
+chainId (string, optional): The chain ID associated with the token (Default: 1 for Aptos Mainnet).
+
+tokenAddress (string, optional): Comma-separated list of coin (legacy) and / or FA addresses. The API returns the price information for the specified tokens. If not provided, the query will return prices of all tokens having liquidity above a nominal threshold.
+
+Token Price Response
+
+The response object contains the following fields:
+
+chainId: The chain ID associated with the token (Default: 1 for Aptos Mainnet)
+
+tokenAddress: The complete address of the token as per the Aptos Coin Standard (Legacy)
+
+faAddress: The complete address of the token as per the Aptos Fungible Asset (FA) Standard
+
+name: The on-chain registered name of the token
+
+symbol: The on-chain registered symbol of the token
+
+decimals: The number of decimal places of the token
+
+usdPrice: The latest usd price of the token
+
+Example Response
+
+Copy
+{
+    "chainId": 1,
+    "tokenAddress": "0x1::aptos_coin::AptosCoin",
+    "faAddress": "0xa",
+    "name": "Aptos Coin",
+    "symbol": "APT",
+    "decimals": 8,
+    "usdPrice": "10.2550984"
+ }
+Attribution
+Kindly include proper attribution when using the API in projects or presentations. Mention “Powered by Panora” wherever applicable.
+
+Directory structure:
+└── panoraexchange-aptos-tokens/
+    ├── README.md
+    ├── package.json
+    ├── submit-token-request.ts
+    ├── token-list.json
+    ├── tsconfig.json
+    ├── types.ts
+    ├── .prettierignore
+    ├── .prettierrc
+    └── logos/
+        └── FTT.webp
+
+
+Files Content:
+
+================================================
+File: README.md
+================================================
+# Panora: The Leading DEX Aggregator on Aptos
+## Superior Aggregation, Best Rates, Exceptional UI/UX, Advanced Token Discovery
+Panora is dedicated to empowering the Aptos community with a seamless and secure trading experience for all tokens. Panora support all tokens tradable on-chain and combines superior aggregation, best rates, a top-tier user interface, with advanced token discovery to provide the best trading experience on Aptos.
+
+## Our Commitment:
+- `Superior Aggregation`: Combining liquidity from all available sources on Aptos for optimal swap and trade experience.
+- `Best Rates`: Utilizing advanced multi-hop and split routing algorithms to secure the best rates.
+- `Exceptional UI/UX`: Enjoy an intuitive and user-friendly interface designed for effortless trading.
+- `Advanced Token Discovery`: Providing a comprehensive and categorized catalog of all tradeable tokens on the Aptos chain.
+
+# Aptos Token List:
+Panora's Aptos Token List is the go-to categorized catalog for both legacy coins and Fungible Assets tradeable on the Aptos chain. You can public API endpoint or JSON file in github to fetch the [Aptos Token List](https://github.com/PanoraExchange/Aptos-Tokens/blob/main/token-list.json). 
+
+Visit [docs.panora.exchange](https://docs.panora.exchange) for detailed information on Token List.
+
+## Panora Tags:
+To enhance token classification and identification, we’ve introduced a field `panoraTags` in token list response. This field combines categories and labels into a single parameter, providing clearer insights and context about each token's status and characteristics. Here’s what they represent:
+
+a) Categories (Tokens are segregated on Panora UI based on their category):
+- `Native`: Tokens that are native to the chain and issued directly on it (excludes emojicoin and meme)
+- `Emojicoin`: Tokens launched on emojicoin.fun (includes both graduated and non-graduated emojicoins).
+- `Meme`: Tokens primarily driven by community hype, memes, or trends
+- `Bridged`: Tokens that originate from another chain and are bridged for use
+
+b) Labels
+- `Verified`: Tokens with verified logo-to-address mapping, ensuring accurate identification.
+- `Recognized`: Tokens with mapped logos but may not be verified by the community yet or have had their Verified label revoked.
+- `Unverified`: Tokens tradable on-chain but aren’t recognized or verified yet. 
+- `Banned`: Tokens flagged for confirmed security risks or malicious activity, discouraged for trading.
+- `InternalFA`: Addresses used by DEXs before the pairing between Coin and Fungible Asset (FA) standard tokens were established; may have unique traits.
+- `LP` (Liquidity Pool): Tokens representing liquidity pool shares in asset pairs.
+
+
+# Projects - How to Add Your Token to the Panora Token List:
+
+To add your token to the Aptos Token List, follow these steps:
+
+## 1. Fork the Repository
+
+Fork the [Aptos-Tokens](https://github.com/PanoraExchange/Aptos-Tokens) repository on GitHub to create your own copy.
+
+## 2. Add Token Icon
+
+Add the token_symbol.svg file for the token in the [logos](https://github.com/PanoraExchange/Aptos-Tokens/tree/main/logos) folder in your forked repository. Ensure it's ~100x100 pixels in .png format and has a unique symbol not used by any existing token. 
+
+## 3. Update `submit-token-request.ts`
+
+Add a [SubmitTokenRequestInfo](https://github.com/PanoraExchange/Aptos-Tokens/blob/main/types.ts#L1) object at the end of [submit-token-request.ts](https://github.com/PanoraExchange/Aptos-Tokens/blob/main/submit-token-request.ts) list.
+
+Provide the following details:
+
+### `SubmitTokenRequestInfo`
+
+- `chainId`: The chain ID associated with the token (Default: 1 for Aptos Mainnet)
+- `tokenAddress`: The complete address of the token as per the Aptos Coin Standard (Legacy)
+- `faAddress`: The complete address of the token as per the Aptos Coin Standard (Legacy)
+- `name`: The on-chain registered name of the token
+- `symbol`: The on-chain registered symbol of the token
+- `decimals`: The number of decimal places of the token
+- `logoUrl`: The URL for the token's logo (the logo should be added to the logos folder in your repository to get the correct link)
+- `websiteUrl`: The official website URL of the token (optional)
+- `coinGeckoId`: The CoinGecko ID of the token (optional)
+- `coinMarketCapId`: The CoinMarketCap ID of the token (optional)
+
+Example:
+
+```typescript
+  {
+    "chainId": 1,
+    "tokenAddress": "0x1::aptos_coin::AptosCoin",
+    "faAddress": "0xa",
+    "name": "Aptos Coin",
+    "symbol": "APT",
+    "decimals": 8,
+    "logoUrl": "https://raw.githubusercontent.com/PanoraExchange/Aptos-Tokens/main/logos/APT.svg",
+    "websiteUrl": "https://aptosfoundation.org",
+    "coinGeckoId": "aptos",
+    "coinMarketCapId": 21794,
+  }
+```
+
+
+## 4. Commit Changes
+
+Commit your changes with a descriptive message explaining the modifications made.
+
+## 5. Make a Pull Request
+
+Navigate to your forked repository, open a pull request, and submit it for review. Select the base repository as [Aptos-Tokens](https://github.com/PanoraExchange/Aptos-Tokens/tree/main) and branch as [main](https://github.com/PanoraExchange/Aptos-Tokens/tree/main) for merging your changes.
+
+## 6. Community Discussion and Amplification
+
+It is highly recommended to engage in discussions when new projects seek validation into the list. Tweet @PanoraExchange to notify your community and Panora about your request submission. This increases visibility and community engagement, potentially expediting approval of your PR
+
+
+`Reminder`: Tokens are always available for trading by pasting the complete token address into our token picker, regardless of their validation status.
+
+
+# Aptos Token List Response
+
+Aptos Token List Response object consists of the following fields:
+
+- `chainId`: The chain ID associated with the token (Default: 1 for Aptos Mainnet)
+- `tokenAddress`: The complete address of the token as per the Aptos Coin Standard (Legacy)
+- `faAddress`: The complete address of the token as per the Aptos Coin Standard (Legacy)
+- `name`: The on-chain registered name of the token
+- `symbol`: The on-chain registered symbol of the token
+- `decimals`: The number of decimal places of the token
+- `bridge`: The bridge associated with the token, if applicable (optional)
+- `panoraSymbol`: Similar to symbol, but with prefixes based on the bridge: lz for LayerZero, wh for Wormhole, and ce for Celer
+- `logoUrl`: The URL for the token’s logo(optional)
+- `websiteUrl`: The official website URL of the token (optional)
+- `panoraUI`: When set to true, displays the token name and logo on the Panora interface.
+- `panoraTags`: Lists the tags associated with the token.
+- `panoraIndex`: The default sorting order of tokens within the Panora UI
+- `coinGeckoId`: The CoinGecko ID of the token (optional)
+- `coinMarketCapId`: The CoinMarketCap ID of the token (optional)
+
+
+Example:
+
+```typescript
+   {
+      "chainId": 1,
+      "tokenAddress": null,
+      "faAddress": "0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b",
+      "name": "Tether USD",
+      "symbol": "USDt",
+      "decimals": 6,
+      "bridge": null,
+      "panoraSymbol": "USDt",
+      "usdPrice": "1.00377379",
+      "logoUrl": "https://raw.githubusercontent.com/PanoraExchange/Aptos-Tokens/main/logos/USDT.svg",
+      "websiteUrl": "https://tether.to",
+      "panoraUI": true,
+      "panoraTags": [
+        "Native",
+        "Verified"
+      ],
+      "panoraIndex": 2,
+      "coinGeckoId": "tether",
+      "coinMarketCapId": 825,
+      "isInPanoraTokenList": true, // Do not use. This field will get deprecated.
+      "isBanned": false // Do not use. This field will get deprecated.
+    }
+```
+
+
+
+================================================
+File: package.json
+================================================
+{
+  "name": "@panoraexchange/token-list",
+  "version": "0.0.1",
+  "type": "module",
+  "private": false,
+  "description": "Token list for Panora Exchange",
+  "main": "dist/cjs/index.js",
+  "dependencies": {
+    "typescript": "^4.4.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "team@panora.exchange",
+  "license": "MIT",
+  "types": "dist/index.d.ts",
+  "devDependencies": {
+    "@types/node": "^20.11.30"
+  }
+}
+
+
+================================================
+File: submit-token-request.ts
+================================================
+import { SubmitTokenRequestInfo } from "types"
+
+const requestList: SubmitTokenRequestInfo[] = []
+
+
+================================================
+File: tsconfig.json
+================================================
+{
+    "compilerOptions": {
+      "target": "ESNext",
+      "downlevelIteration": true,
+      "lib": ["dom", "dom.iterable", "esnext"],
+      "allowJs": true,
+      "skipLibCheck": true,
+      "esModuleInterop": true,
+      "allowSyntheticDefaultImports": true,
+      "strict": true,
+      "forceConsistentCasingInFileNames": true,
+      "noFallthroughCasesInSwitch": true,
+      "module": "CommonJS",
+      "moduleResolution": "node",
+      "resolveJsonModule": true,
+      "isolatedModules": true,
+      "jsx": "preserve",
+      "incremental": true,
+      "baseUrl": ".",
+      "declaration": true,
+      "declarationDir": "types",
+      "rootDir": ".",
+      "sourceMap": true,
+      "outDir": "dist",
+      "emitDeclarationOnly": true,
+    },
+    "include": ["src", "env.d.ts", "**/*.ts", "**/*.tsx"],
+    "exclude": ["node_modules"]
+  }
+  
+
+================================================
+File: types.ts
+================================================
+export type SubmitTokenRequestInfo = {
+  chainId: number
+  tokenAddress: `0x${string}` | null
+  faAddress: `0x${string}` | null
+  name: string
+  symbol: string
+  decimals: number
+  logoUrl: string
+  websiteUrl: string
+  coinGeckoId: string | null
+  coinMarketCapId: number | null
+}
+
+export type TokenInfo = {
+  chainId: number
+  tokenAddress: `0x${string}` | null
+  faAddress: `0x${string}` | null
+  name: string
+  symbol: string
+  decimals: number
+  bridge: "LayerZero" | "Wormhole" | "Celer" | "Echo" | null
+  panoraSymbol: string
+  logoUrl: string | null
+  websiteUrl: string | null
+  panoraUI: boolean
+  panoraTags?: string[] | null
+  panoraIndex?: number | null
+  coinGeckoId: string | null
+  coinMarketCapId: number | null
+}
+
+
+================================================
+File: .prettierignore
+================================================
+node_modules
+package.json
+img
+artifacts
+cache
+coverage
+.env
+.*
+README.md
+coverage.json
+
+================================================
+File: .prettierrc
+================================================
+{
+    "tabWidth": 2,
+    "useTabs": false,
+    "semi": false,
+    "singleQuote": false
+  }
+

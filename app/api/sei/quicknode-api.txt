@@ -1,0 +1,272 @@
+Sei RPC
+With QuickNode, you get access to our global network which always routes your API requests to the nearest available location, ensuring low latency and fastest speeds.
+Note:
+The QuickNode Sei documentation constantly evolves as the chain undergoes upgrades and changes. We highly recommend cross-referencing with the Sei Documentation for the latest updates.
+
+Overview
+At QuickNode, we run Sei RPC endpoints. In aggregate, we serve hundreds of billions of requests every month. To make it easier for developers to integrate with QuickNode, we've created this documentation that shows how to call RPC methods using cURL, JavaScript, Python, Ruby and any applicable Web3 SDKs. QuickNode-supported Sei APIs include:
+
+Ethereum JSON-RPC API
+Debug API
+Tendermint JSON-RPC/REST API
+Cosmos REST API
+CosmWasm REST API
+Sei JSON-RPC API
+Sei Network Support
+Network	WSS	HTTPS	Supported APIs
+TESTNET	✅	✅	EVM, Tendermint JSON-RPC/REST, Cosmos REST API, CosmWasm REST API, Sei JSON-RPC API
+MAINNET	✅	✅	EVM, Tendermint JSON-RPC/REST, Cosmos REST API, CosmWasm REST API, Sei JSON-RPC API
+Making Sei API Requests
+In this documentation, you will see example requests made with various programming languages and Web3 SDKs for each supported Sei method. This section will explain how to execute each one of them on your machine.
+
+cURL
+Most *nix based systems have cURL support out of the box. cURL is a command line tool and library for transferring data with URLs. Check if you have it by running the following:
+
+curl -h
+
+Python
+To run our Python code examples, you'll need to have Python installed as well as the requests package. You can install this package with the following command:
+
+python -m pip install requests
+
+JavaScript
+To run our JavaScript code examples, you'll need to have Node v18 and up installed. You can follow this official document to install the latest, stable version of Node globally. Check if you have it by running the following:
+
+node -v
+
+Ruby
+To run our Ruby code examples, you'll need to have Ruby installed. You can follow this official installation document for more information. Check if you have it by running the following:
+
+ruby -v
+
+Web3.py
+Web3.py is a Python library for interacting with Ethereum. If you'd like to use it, please be sure to install it like so:
+
+pip install web3
+
+Ethers.js
+At QuickNode we prefer ethers.js as our JS library for interacting with JSON-RPCs when possible. Ethers aims to be a complete and compact library for interacting with the Ethereum Blockchain and its ecosystem. If you'd like to use it, please be sure to install it like so:
+
+npm install ethers
+
+Eth.rb
+Eth.rb is a comprehensive ruby library that provides a high-level interface to interact with the Ethereum blockchain, making it easier for developers to manage accounts, send transactions, and work with smart contracts. If you'd like to use it, please be sure to install it like so:
+
+gem install eth
+
+go
+Go is a statically-typed, compiled language known for its simplicity, efficiency, and strong concurrency support, making it well-suited for developing applications and services. You can follow this official installation document for more information. Check if you have it by running the following:
+
+go version
+
+Authentication Required for Cosmos gRPC
+To ensure secure access to Cosmos gRPC, users are required to authenticate themselves. This authentication process is necessary before utilizing any method. QuickNode endpoints consist of two crucial components: the endpoint name and the corresponding token. Users will need to use these two components to configure a gRPC client with authentication credentials before they make any method calls.
+
+Throughout this documentation, we will demonstrate how to handle authentication using the getGrpcOptions function. This function is utilized in each code sample to configure the gRPC client with authentication credentials. Here is the code implementation of the getGrpcOptions function as well as a basicAuth implementation of RPC credentials:
+
+
+package main
+
+import (
+	"context"
+	"crypto/tls"
+	"encoding/base64"
+	"fmt"
+	"log"
+	"net/url"
+	"strings"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+)
+
+
+func getGrpcOptions(endpointURL string) (string, []grpc.DialOption) {
+	parsed, err := url.Parse(endpointURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	username := strings.Split(parsed.Host, ".")[0]
+	password := strings.Trim(parsed.Path, "/")
+	grpcOpts := []grpc.DialOption{
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024 * 1024 * 1024)),
+	}
+
+	grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{})))
+	port := 9090
+
+	target := fmt.Sprintf("%s:%d", parsed.Hostname(), port)
+	if password == "" {
+		log.Println("no auth token (password) set, skipping basic auth")
+		return target, grpcOpts
+	}
+
+	// create rpc credentials using basicAuth implementation of credentials.PerRPCCredentials
+	creds := basicAuth{username: username, password: password}
+	grpcOpts = append(grpcOpts, grpc.WithPerRPCCredentials(creds))
+
+	return target, grpcOpts
+}
+
+// basicAuth is a simple implementation of credentials.PerRPCCredentials
+// to support basic authentication for grpc requests
+// customers may copy/paste this or implement with their own struct
+type basicAuth struct {
+	username string
+	password string
+}
+
+func (b basicAuth) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
+	auth := b.username + ":" + b.password
+	enc := base64.StdEncoding.EncodeToString([]byte(auth))
+	return map[string]string{
+		"authorization": "Basic " + enc,
+	}, nil
+}
+
+func (basicAuth) RequireTransportSecurity() bool {
+	return false
+}
+
+
+The getGrpcOptions function configures a gRPC client with the necessary security options and establishes a connection to the specified endpoint on port 9090. It takes the endpoint as input parameters and returns the target address and a set of options to configure the gRPC client for establishing a connection to the specified endpoint, which you can use to make authenticated API calls.
+
+
+target, opts := getGrpcOptions("YOUR_QUICKNODE_ENDPOINT")
+grpcConn, err := grpc.Dial(target, opts...)
+if err != nil {
+	log.Fatal(err)
+}
+
+defer grpcConn.Close()
+
+
+API Credits
+Usage in our pricing plans is measured in API Credits. To learn more about the API Credits for Sei, please visit this page.
+
+WebSocket Limits
+WebSocket responses are capped at a certain limit, which is subject to change. In cases where responses are potentially large, it is recommended to use a POST request. If the response size exceeds the limit, the associated error code will be -32616.
+
+Endpoint Authentication Options
+
+Note:
+Please note that setting JWT (JSON Web Tokens), configuring all whitelist options, and changing any rate limits beyond credits per second are only available to users on the Build plan and higher. Users on the Free plan can only change their requests per second rate limit or add, use, and delete an authentication token. Visit our pricing page for more information.
+
+Token Authentication
+By default, all endpoints created on QuickNode are protected by a token in the URL which looks something like this:
+
+
+http://sample-endpoint-name.network.quiknode.pro/token-goes-here/
+Approved Referrer List
+For endpoints on the shared network, you are able to add a list of approved referrers. This requires any HTTP request to send a REFERRER header or any WebSocket request to send an ORIGIN header populated with one of the referrers you entered into our user panel.
+
+Disabling Token Authentication
+You can also disable the token authentication completely in your security settings for a given endpoint. This will allow anyone to make requests to the endpoint without the token.
+
+JWT (JSON Web Tokens)
+For additional security, you can also enable JWT for each of your deployed endpoints. JWT allows for stateless authentication between you and your endpoint. Learn how to use JWT with QuickNode in this step-by-step guide.
+
+Multiple Authentication Tokens
+Create multiple authentication tokens for each of your deployed endpoints. This allows you to revoke any tokens that may be comprised, without needing to restart your non-compromised endpoint.
+
+To roll an individual authentication token, create an additional token and then delete the previous token. Learn more about multiple authentication tokens in this QuickNode guide.
+
+sei_getCosmosTx RPC Method
+Returns a Cosmos transaction hash given a EVM transaction hash. The API credit value for this method is 20.
+Updated on
+May 20, 2024
+Parameters
+hash
+string
+REQUIRED
+An EVM transaction hash
+Returns
+hash
+string
+A Cosmos transaction hash
+Request
+
+Curl
+curl --location 'https://docs-demo.sei-pacific.quiknode.pro/' \
+--header 'Content-Type: application/json' \
+--data '{
+  "method": "sei_getCosmosTx",
+  "params": ["0x9271e0f01bac5a9c1e54524fdc0b5acf1d1c2486b094d4aa562fc6dcb5696489"],
+  "id": 1,
+  "jsonrpc": "2.0"
+}'
+
+sei_getEvmTx RPC Method
+Returns an EVM transaction hash given a Cosmos transaction hash. The API credit value for this method is 20.
+Updated on
+Jun 27, 2024
+Parameters
+hash
+string
+REQUIRED
+A Cosmos transaction hash
+Returns
+hash
+string
+An EVM transaction hash
+Request
+
+Curl
+curl --location 'https://necessary-old-flower.sei-pacific.quiknode.pro/d65fe35c722255c7db2360e2e4af15621db7a4db/' \
+--header 'Content-Type: application/json' \
+--data '{
+  "method": "sei_getEvmTx",
+  "params": ["3BAE4FEE4C8E7658F57A34B53C48A56771F3A427C3674136C4DBA152FE8F3823"],
+  "id": 1,
+  "jsonrpc": "2.0"
+}'
+
+sei_getEVMAddress RPC Method
+Returns a EVM address given a Sei address. The API credit value for this method is 20.
+Updated on
+May 28, 2024
+Parameters
+address
+string
+REQUIRED
+The Sei address
+Returns
+address
+string
+An EVM address based on the given Sei address
+Request
+
+Curl
+curl --location 'https://necessary-old-flower.sei-pacific.quiknode.pro/d65fe35c722255c7db2360e2e4af15621db7a4db/' \
+--header 'Content-Type: application/json' \
+--data '{
+  "method": "sei_getEVMAddress",
+  "params": ["sei1m9zk5qjmhezdtyjqzq9nez26h3e3cg42fk0n8d"],
+  "id": 1,
+  "jsonrpc": "2.0"
+}'
+
+sei_getSeiAddress RPC Method
+Returns a Sei address given an EVM address. The API credit value for this method is 20.
+Updated on
+May 29, 2024
+Parameters
+address
+string
+REQUIRED
+The EVM address
+Returns
+address
+string
+A Sei address based on the given EVM address
+Request
+
+Curl
+curl --location 'https://necessary-old-flower.sei-pacific.quiknode.pro/d65fe35c722255c7db2360e2e4af15621db7a4db/' \
+--header 'Content-Type: application/json' \
+--data '{
+  "method": "sei_getSeiAddress",
+  "params": ["0x5cb8491452dab1b31526edf5fabd9d7b56e616d9"],
+  "id": 1,
+  "jsonrpc": "2.0"
+}'

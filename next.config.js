@@ -28,6 +28,7 @@ const nextConfig = {
     API_URL: process.env.API_URL || '/api',
     APP_URL: process.env.APP_URL || 'http://localhost:3000',
     DEFAULT_CHAIN: process.env.DEFAULT_CHAIN || 'aptos',
+    SIMPLEHASH_API_KEY: process.env.SIMPLEHASH_API_KEY,
     // Expose wallet addresses for client-side configuration
     ...Object.keys(process.env).reduce((acc, key) => {
       if (key.match(/^(SOLANA|APTOS|SUI)_WALLET_/)) {

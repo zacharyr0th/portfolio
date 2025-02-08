@@ -35,6 +35,31 @@ export interface NFTBalance {
   image_url: string;
   collection: NFTCollection;
   floor_price?: NFTFloorPrice;
+  price_info?: {
+    price_amount?: number;
+    price_currency?: string;
+    price_usd?: number;
+  };
+}
+
+// Add new interface for fetch options
+export interface FetchWalletNFTsOptions {
+  queried_wallet_balances?: boolean;
+  collection_ids?: string[];
+  contract_ids?: string[];
+  filters?: {
+    spam_score__lte?: number;
+    spam_score__gte?: number;
+    spam_score__lt?: number;
+    spam_score__gt?: number;
+  };
+  excluded_contract_ids?: string[];
+  include_escrowed_nfts?: boolean;
+  include_attribute_percentages?: boolean;
+  count?: boolean;
+  cursor?: string;
+  order_by?: "transfer_time__desc" | "transfer_time__asc" | string;
+  limit?: number;
 }
 
 // Constants
@@ -44,16 +69,43 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
 const BASE_URL = "https://api.simplehash.com/api/v0";
 
-// Chain mapping
+// Chain mapping - only chains fully supported by SimpleHash for NFTs
 const CHAIN_MAPPING = {
-  aptos: "aptos",
-  solana: "solana",
-  sui: "sui",
+  // Layer 1s
   ethereum: "ethereum",
+  solana: "solana",
+  bitcoin: "bitcoin",
+  utxo: "utxo", // Bitcoin Rare Sats
+  tezos: "tezos",
+  aptos: "aptos",
+  flow: "flow",
+  flow_evm: "flow-evm",
+
+  // EVM Layer 2s & Sidechains
   polygon: "polygon",
   arbitrum: "arbitrum",
-  optimism: "optimism",
+  arbitrum_nova: "arbitrum-nova",
+  avalanche: "avalanche",
   base: "base",
+  blast: "blast",
+  bsc: "bsc",
+  canto: "canto",
+  celo: "celo",
+  fantom: "fantom",
+  gnosis: "gnosis", // POAP contract only
+  immutable_zkevm: "immutable-zkevm",
+  linea: "linea",
+  manta: "manta",
+  mantle: "mantle",
+  mode: "mode",
+  moonbeam: "moonbeam",
+  opbnb: "opbnb",
+  optimism: "optimism",
+  palm: "palm",
+  polygon_zkevm: "polygon-zkevm",
+  scroll: "scroll",
+  zksync_era: "zksync-era",
+  zora: "zora",
 } as const;
 
 // Cache configuration
@@ -93,6 +145,7 @@ async function makeRequest<T>(url: string): Promise<T> {
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
   try {
+    console.log("Making SimpleHash API request:", { url });
     const response = await fetch(url, {
       headers: {
         "X-API-KEY": process.env.SIMPLEHASH_API_KEY || "",
@@ -104,12 +157,21 @@ async function makeRequest<T>(url: string): Promise<T> {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      console.error("SimpleHash API error response:", {
+        status: response.status,
+        error: errorData,
+      });
       throw new Error(
         errorData.error || `HTTP error! status: ${response.status}`,
       );
     }
 
-    return response.json();
+    const data = await response.json();
+    console.log("SimpleHash API response:", {
+      status: response.status,
+      dataSize: JSON.stringify(data).length,
+    });
+    return data;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -125,13 +187,14 @@ function getChainIdentifier(chain: string): string {
   return mappedChain;
 }
 
-// Fetch NFTs for a wallet
+// Update fetchWalletNFTs function
 export async function fetchWalletNFTs(
   walletAddress: string,
   chain: string,
+  options: FetchWalletNFTsOptions = {},
 ): Promise<NFTBalance[]> {
   const chainId = getChainIdentifier(chain);
-  const cacheKey = `nfts-${chainId}-${walletAddress}`;
+  const cacheKey = `nfts-${chainId}-${walletAddress}-${JSON.stringify(options)}`;
 
   try {
     // Check cache first
@@ -140,10 +203,50 @@ export async function fetchWalletNFTs(
       return cached as NFTBalance[];
     }
 
+    // Build query parameters
+    const queryParams = new URLSearchParams({
+      chains: chainId,
+      wallet_addresses: walletAddress,
+    });
+
+    // Add optional parameters
+    if (options.queried_wallet_balances)
+      queryParams.append("queried_wallet_balances", "1");
+    if (options.collection_ids?.length)
+      queryParams.append("collection_ids", options.collection_ids.join(","));
+    if (options.contract_ids?.length)
+      queryParams.append("contract_ids", options.contract_ids.join(","));
+    if (options.excluded_contract_ids?.length)
+      queryParams.append(
+        "excluded_contract_ids",
+        options.excluded_contract_ids.join(","),
+      );
+    if (options.include_escrowed_nfts)
+      queryParams.append("include_escrowed_nfts", "1");
+    if (options.include_attribute_percentages)
+      queryParams.append("include_attribute_percentages", "1");
+    if (options.count) queryParams.append("count", "1");
+    if (options.cursor) queryParams.append("cursor", options.cursor);
+    if (options.order_by) queryParams.append("order_by", options.order_by);
+    if (options.limit) queryParams.append("limit", options.limit.toString());
+
+    // Add filters if present
+    if (options.filters) {
+      const filterStrings: string[] = [];
+      Object.entries(options.filters).forEach(([key, value]) => {
+        if (value !== undefined) {
+          filterStrings.push(`${key}=${value}`);
+        }
+      });
+      if (filterStrings.length) {
+        queryParams.append("filters", filterStrings.join(","));
+      }
+    }
+
     // Fetch from API with retry
     const response = await retryOperation(() =>
       makeRequest<{ nfts: any[] }>(
-        `${BASE_URL}/nfts/owners_v2?chains=${chainId}&wallet_addresses=${walletAddress}`,
+        `${BASE_URL}/nfts/owners_v2?${queryParams.toString()}`,
       ),
     );
 
@@ -166,6 +269,14 @@ export async function fetchWalletNFTs(
             currency: nft.collection.floor_price.currency,
           }
         : undefined,
+      price_info:
+        nft.chain === "aptos" && nft.price_info
+          ? {
+              price_amount: Number(nft.price_info.price_amount),
+              price_currency: nft.price_info.price_currency,
+              price_usd: Number(nft.price_info.price_usd),
+            }
+          : undefined,
     }));
 
     // Cache the results
@@ -180,6 +291,7 @@ export async function fetchWalletNFTs(
       {
         wallet: walletAddress,
         chain: chainId,
+        options,
       },
     );
     throw error;

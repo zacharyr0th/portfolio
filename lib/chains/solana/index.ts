@@ -5,18 +5,19 @@ import type {
   TokenPrice,
   SolanaAccountInfo,
   TokenAccount,
+  SolanaToken,
 } from "./types";
 import type { ChainHandler } from "../types";
 import { BaseChainHandler } from "../baseHandler";
 import { logger } from "@/lib/utils/core/logger";
 import { SolanaTokenBalance } from "./TokenBalance";
 import {
-  TOKEN_SYMBOL_MAP,
-  DEFAULT_PRICE,
   TOKEN_PROGRAM_ID,
   NATIVE_SOL_MINT,
+  USDC_MINT,
+  USDT_MINT,
+  DEFAULT_PRICE,
 } from "./constants";
-import { getJupiterQuote, getJupiterTokenPrice } from "./jupiter";
 
 // Helper function to make RPC requests with retries
 async function makeRpcRequest<T>(method: string, params: any[]): Promise<T> {
@@ -80,29 +81,6 @@ async function makeRpcRequest<T>(method: string, params: any[]): Promise<T> {
   throw new Error("Max retries exceeded");
 }
 
-// Helper function to get BEENZ price from Jupiter
-async function getBeenzPrice(): Promise<number> {
-  try {
-    // Get quote for 1 BEENZ to USDC
-    const quote = await getJupiterQuote({
-      inputMint: "9sbrLLnk4vxJajnZWXP9h5qk1NDFw7dz2eHjgemcpump", // BEENZ
-      outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC
-      amount: 1000000, // 1 BEENZ (6 decimals)
-      slippageBps: 100,
-    });
-
-    // Calculate price in USD (USDC)
-    const outAmount = Number(quote.outAmount) / Math.pow(10, 6); // USDC has 6 decimals
-    const inAmount = Number(quote.inAmount) / Math.pow(10, 6); // BEENZ has 6 decimals
-    return outAmount / inAmount;
-  } catch (error) {
-    logger.warn("Failed to fetch BEENZ price from Jupiter", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return 0;
-  }
-}
-
 // Create Solana handler instance
 const solanaHandlerInstance = new BaseChainHandler({
   chainName: "solana",
@@ -134,23 +112,28 @@ const solanaHandlerInstance = new BaseChainHandler({
       );
 
       const balances: TokenBalance[] = [];
+      const tokenAddresses: string[] = [];
 
       // Add SOL balance
       if (accountInfo?.value) {
         const lamports = accountInfo.value.lamports;
         // Only add SOL balance if it's greater than 0.000001 SOL (dust threshold)
         if (lamports > 1000) {
+          const solToken: SolanaToken = {
+            symbol: "SOL",
+            name: "Solana",
+            decimals: 9,
+            tokenAddress: NATIVE_SOL_MINT,
+            isNative: true,
+          };
           // Add native SOL balance first
           balances.unshift({
-            token: {
-              symbol: "SOL",
-              name: "Solana",
-              decimals: 9,
-              tokenAddress: NATIVE_SOL_MINT,
-              isNative: true,
-            },
+            token: solToken,
             balance: lamports.toString(),
+            uiAmount: lamports / Math.pow(10, 9),
+            valueUsd: 0, // Will be updated with price data
           });
+          tokenAddresses.push(NATIVE_SOL_MINT);
         }
       }
 
@@ -167,27 +150,36 @@ const solanaHandlerInstance = new BaseChainHandler({
             // Skip wrapped SOL to avoid duplication with native SOL
             if (mint === NATIVE_SOL_MINT) continue;
 
-            const tokenInfo = TOKEN_SYMBOL_MAP[mint] || {
-              symbol: mint.slice(0, 6) + "...",
-              name: "Unknown Token",
-              decimals: tokenAmount.decimals,
-            };
-
             const amount = parseFloat(tokenAmount.amount);
             // Filter out dust amounts based on token
             const minAmount =
-              tokenInfo.symbol === "USDC" || tokenInfo.symbol === "USDT"
-                ? Math.pow(10, tokenInfo.decimals - 2) // $0.01 for stablecoins
-                : Math.pow(10, tokenInfo.decimals - 6); // 0.000001 for other tokens
+              mint === USDC_MINT || mint === USDT_MINT
+                ? Math.pow(10, tokenAmount.decimals - 2) // $0.01 for stablecoins
+                : Math.pow(10, tokenAmount.decimals - 6); // 0.000001 for other tokens
 
             if (amount > minAmount) {
+              // Get token metadata from the chain
+              const tokenMetadata = await makeRpcRequest<any>(
+                "getTokenSupply",
+                [mint],
+              );
+              const symbol = tokenMetadata?.symbol || mint.slice(0, 6) + "...";
+              const name = tokenMetadata?.name || symbol;
+
+              const token: SolanaToken = {
+                symbol,
+                name,
+                decimals: tokenAmount.decimals,
+                tokenAddress: mint,
+              };
+
               balances.push({
-                token: {
-                  ...tokenInfo,
-                  tokenAddress: mint,
-                },
+                token,
                 balance: tokenAmount.amount,
+                uiAmount: amount / Math.pow(10, tokenAmount.decimals),
+                valueUsd: 0, // Will be updated with price data
               });
+              tokenAddresses.push(mint);
             }
           } catch (err) {
             logger.warn("Error processing token account", {
@@ -198,7 +190,32 @@ const solanaHandlerInstance = new BaseChainHandler({
         }
       }
 
-      // Sort balances by value (if prices are available)
+      // Fetch prices for all tokens
+      const response = await fetch(
+        `/api/solana?tokens=${tokenAddresses.join(",")}&showExtraInfo=true`,
+      );
+      if (response.ok) {
+        const { prices } = (await response.json()) as {
+          prices: Record<string, TokenPrice>;
+        };
+
+        // Update balances with USD values
+        for (const balance of balances) {
+          const price = prices[balance.token.tokenAddress];
+          if (price) {
+            balance.valueUsd = balance.uiAmount * price.price;
+          } else if (
+            balance.token.tokenAddress === USDC_MINT ||
+            balance.token.tokenAddress === USDT_MINT
+          ) {
+            balance.valueUsd = balance.uiAmount; // Stablecoins 1:1
+          }
+        }
+
+        // Sort balances by USD value
+        balances.sort((a, b) => (b.valueUsd || 0) - (a.valueUsd || 0));
+      }
+
       return { balances };
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
@@ -208,35 +225,70 @@ const solanaHandlerInstance = new BaseChainHandler({
   },
   fetchPricesImpl: async () => {
     try {
-      // Get all unique token symbols
-      const tokenSymbols = Object.values(TOKEN_SYMBOL_MAP).map((t) => t.symbol);
-      const uniqueSymbols = Array.from(new Set(tokenSymbols));
+      // Get token addresses from current balances
+      const balances = await solanaHandlerInstance.fetchBalances("", "");
+      const tokenAddresses = balances.balances.map((b) => b.token.tokenAddress);
+      const tokenSymbols = balances.balances.map((b) => b.token.symbol);
 
-      // Fetch prices from CMC
-      const prices = await fetchTokenPrices(uniqueSymbols);
+      if (tokenAddresses.length === 0) {
+        return {};
+      }
+
+      // Try Jupiter first
+      const response = await fetch(
+        `/api/solana?tokens=${tokenAddresses.join(",")}&showExtraInfo=true`,
+      );
       const tokenPrices: Record<string, TokenPrice> = {};
 
-      // Process each token's price
-      for (const symbol of uniqueSymbols) {
-        if (prices?.[symbol]) {
-          tokenPrices[symbol] = {
-            price: prices[symbol].price || 0,
-            priceChange24h: prices[symbol].percent_change_24h || 0,
+      if (response.ok) {
+        const { prices } = (await response.json()) as {
+          prices: Record<string, TokenPrice>;
+        };
+
+        // Process each token's price
+        for (const balance of balances.balances) {
+          const priceData = prices[balance.token.tokenAddress];
+          if (priceData) {
+            tokenPrices[balance.token.symbol] = priceData;
+          }
+        }
+      }
+
+      // Fetch CMC prices as fallback for missing prices
+      const missingSymbols = tokenSymbols.filter(
+        (symbol) =>
+          !tokenPrices[symbol] && symbol !== "USDC" && symbol !== "USDT",
+      );
+      if (missingSymbols.length > 0) {
+        const cmcPrices = await fetchTokenPrices(missingSymbols);
+
+        for (const symbol of missingSymbols) {
+          if (cmcPrices?.[symbol]) {
+            tokenPrices[symbol] = {
+              price: cmcPrices[symbol].price || 0,
+              priceChange24h: cmcPrices[symbol].percent_change_24h || 0,
+              lastUpdated: Date.now(),
+              confidence: 0.8, // Lower confidence for CMC prices
+            };
+          }
+        }
+      }
+
+      // Handle stablecoins
+      for (const balance of balances.balances) {
+        if (
+          !tokenPrices[balance.token.symbol] &&
+          (balance.token.tokenAddress === USDC_MINT ||
+            balance.token.tokenAddress === USDT_MINT)
+        ) {
+          tokenPrices[balance.token.symbol] = {
+            price: 1,
+            priceChange24h: 0,
             lastUpdated: Date.now(),
             confidence: 1,
           };
-        } else {
-          // For stablecoins, use 1:1 USD price
-          if (symbol === "USDC" || symbol === "USDT") {
-            tokenPrices[symbol] = {
-              price: 1,
-              priceChange24h: 0,
-              lastUpdated: Date.now(),
-              confidence: 1,
-            };
-          } else {
-            tokenPrices[symbol] = DEFAULT_PRICE;
-          }
+        } else if (!tokenPrices[balance.token.symbol]) {
+          tokenPrices[balance.token.symbol] = DEFAULT_PRICE;
         }
       }
 

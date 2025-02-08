@@ -1,12 +1,12 @@
 import { logger } from "@/lib/utils/core/logger";
 import type { JupiterToken, PriceQuote } from "./types";
-import { SOLANA_TOKENS } from "./constants";
+import { USDC_MINT } from "./constants";
 
 // Token Constants
 export const JUPITER_TOKENS = {
   BEENZ: "9sbrLLnk4vxJajnZWXP9h5qk1NDFw7dz2eHjgemcpump",
   SOL: "So11111111111111111111111111111111111111112",
-  USDC: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  USDC: USDC_MINT,
 } as const;
 
 const JUPITER_API_BASE_URL = "https://quote-api.jup.ag/v6";
@@ -160,7 +160,7 @@ export async function getJupiterTokenPrice(
 
     const quote = await getJupiterQuote({
       inputMint: tokenMint,
-      outputMint: SOLANA_TOKENS.USDC,
+      outputMint: USDC_MINT,
       amount: baseAmount,
       slippageBps: DEFAULT_SLIPPAGE_BPS,
       restrictIntermediateTokens: true,

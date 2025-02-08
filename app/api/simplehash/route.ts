@@ -65,6 +65,11 @@ export async function GET(req: NextRequest) {
     const isMetadataRequest =
       searchParams.has("contract") && searchParams.has("tokenId");
 
+    console.log("SimpleHash API Request:", {
+      params: Object.fromEntries(searchParams.entries()),
+      isMetadataRequest,
+    });
+
     if (isMetadataRequest) {
       const result = nftMetadataSchema.safeParse({
         contract: searchParams.get("contract"),
@@ -87,11 +92,14 @@ export async function GET(req: NextRequest) {
     });
 
     if (!result.success) {
+      console.error("Validation Error:", result.error);
       return createErrorResponse("Invalid wallet address or chain", 400);
     }
 
     const { wallet, chain } = result.data;
+    console.log("Fetching NFTs for:", { wallet, chain });
     const nfts = await fetchWalletNFTs(wallet, chain);
+    console.log("NFTs Response:", { count: nfts.length });
     return createSuccessResponse(nfts);
   } catch (error) {
     console.error("SimpleHash API Error:", error);

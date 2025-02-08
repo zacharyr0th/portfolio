@@ -14,6 +14,38 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/app/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  CHAIN_CONFIG,
+  isEvmChain,
+  TOKEN_SUPPORTED_CHAINS,
+  NFT_SUPPORTED_CHAINS,
+  type ChainType,
+} from "@/lib/chains/constants";
+
+// Helper function to check if a chain supports both tokens and NFTs
+const supportsTokensAndNfts = (chain: ChainType): boolean => {
+  return chain in TOKEN_SUPPORTED_CHAINS && chain in NFT_SUPPORTED_CHAINS;
+};
+
+// Get supported chains for NFTs and tokens
+const getSupportedChains = () => {
+  return Object.entries(CHAIN_CONFIG)
+    .filter(([chain]) => {
+      const chainType = chain as ChainType;
+      return supportsTokensAndNfts(chainType);
+    })
+    .map(([id, config]) => ({
+      id: id as ChainType,
+      name: config.name,
+    }));
+};
 
 interface NftModalProps {
   isOpen: boolean;
@@ -32,6 +64,17 @@ export function NftModal({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [selectedChain, setSelectedChain] = useState<ChainType>(() => {
+    const normalizedChain = chain
+      .toLowerCase()
+      .replace("-main", "") as ChainType;
+    // Default to ethereum if the current chain doesn't support both tokens and NFTs
+    return supportsTokensAndNfts(normalizedChain)
+      ? normalizedChain
+      : "ethereum";
+  });
+
+  const supportedChains = getSupportedChains();
 
   const copyAddress = useCallback(() => {
     navigator.clipboard.writeText(walletAddress);
@@ -40,13 +83,18 @@ export function NftModal({
   }, [walletAddress]);
 
   const fetchNFTs = useCallback(async () => {
-    if (!walletAddress || !chain) return;
+    if (
+      !walletAddress ||
+      !selectedChain ||
+      !supportsTokensAndNfts(selectedChain)
+    )
+      return;
 
     setIsLoading(true);
     setError(null);
     try {
       const response = await fetch(
-        `/api/simplehash?wallet=${encodeURIComponent(walletAddress)}&chain=${encodeURIComponent(chain)}`,
+        `/api/simplehash?wallet=${encodeURIComponent(walletAddress)}&chain=${encodeURIComponent(selectedChain)}`,
       );
       if (!response.ok) {
         const errorData = await response.json();
@@ -60,7 +108,7 @@ export function NftModal({
     } finally {
       setIsLoading(false);
     }
-  }, [walletAddress, chain]);
+  }, [walletAddress, selectedChain]);
 
   useEffect(() => {
     if (isOpen) {
@@ -71,7 +119,26 @@ export function NftModal({
     }
   }, [isOpen, fetchNFTs]);
 
+  const handleChainChange = (newChain: ChainType) => {
+    if (supportsTokensAndNfts(newChain)) {
+      setSelectedChain(newChain);
+    }
+  };
+
   const renderContent = () => {
+    if (!supportsTokensAndNfts(selectedChain)) {
+      return (
+        <div className="flex flex-col items-center justify-center h-48 gap-2">
+          <p className="text-destructive">
+            Chain does not support both tokens and NFTs
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Please select a supported chain
+          </p>
+        </div>
+      );
+    }
+
     if (isLoading) {
       return (
         <div className="flex items-center justify-center h-48">
@@ -119,7 +186,25 @@ export function NftModal({
       <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader className="px-6 py-4 border-b shrink-0">
           <DialogTitle className="flex items-center justify-between">
-            <span className="text-xl font-semibold">NFTs</span>
+            <div className="flex items-center gap-4">
+              <span className="text-xl font-semibold">NFTs</span>
+              <Select value={selectedChain} onValueChange={handleChainChange}>
+                <SelectTrigger className="w-[140px] h-8 text-xs">
+                  <SelectValue placeholder="Select chain" />
+                </SelectTrigger>
+                <SelectContent>
+                  {supportedChains.map((chain) => (
+                    <SelectItem
+                      key={chain.id}
+                      value={chain.id}
+                      className="text-xs"
+                    >
+                      {chain.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>

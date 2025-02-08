@@ -37,6 +37,7 @@ export interface TokenBalance {
   token: ChainToken;
   balance: string;
   uiAmount: number;
+  valueUsd?: number;
 }
 
 export type ChainTokenBalance = TokenBalance;
@@ -66,6 +67,7 @@ export type ChainType = (typeof CHAINS)[number];
 // Props for balance display components
 export interface BalanceDisplayProps {
   balance: ChainTokenBalance;
+  balances?: ChainTokenBalance[];
   prices: Record<string, ChainTokenPrice>;
   showPrice?: boolean;
   compact?: boolean;
@@ -73,6 +75,8 @@ export interface BalanceDisplayProps {
   canHide?: boolean;
   isHidden?: boolean;
   showHiddenTokens?: boolean;
+  showUSD?: boolean;
+  showChange?: boolean;
   className?: string;
 }
 

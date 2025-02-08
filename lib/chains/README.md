@@ -1,134 +1,64 @@
-# Blockchain Integration Guide
+# Supported Chains
 
-This guide provides step-by-step instructions for adding new blockchain network support to the portfolio platform.
+## Full Support (Native Assets, Fungible Assets, and NFTs)
 
-## Directory Structure
+| Number | Chain        | Native Assets (Source) | Fungible Assets (Source) | NFTs (Source) | Chain Type |
+| ------ | ------------ | ---------------------- | ------------------------ | ------------- | ---------- |
+| 1      | Aptos        | ✅ Panora              | ✅ Aptos Fullnode        | ✅ SimpleHash | L1         |
+| 2      | Ethereum     | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L1         |
+| 3      | Solana       | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L1         |
+| 4      | Bitcoin      | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L1         |
+| 5      | Sei          | ❌                     | ❌                       | ✅ SimpleHash | L1         |
+| 6      | Sui          | ❌                     | ❌                       | ✅ SimpleHash | L1         |
+| 7      | Flow         | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L1         |
+| 8      | Celo         | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L1         |
+| 9      | Arbitrum One | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
+| 10     | Base         | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
+| 11     | Blast        | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
+| 12     | Cyber        | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
+| 13     | Mantle       | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
+| 14     | Optimism     | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
+| 15     | Scroll       | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
+| 16     | Flow EVM     | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
+| 17     | Zora         | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
+| 18     | Polygon      | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | Sidechain  |
+| 19     | Gnosis       | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | Sidechain  |
 
-Each chain integration must follow this structure:
+## Native and Fungible Assets Support (No NFTs)
 
-```
-lib/chains/
-├── [chain]/                # Chain-specific directory (e.g., solana, aptos, sui)
-│   ├── index.ts           # Main chain handler implementation
-│   ├── types.ts           # Chain-specific type definitions
-│   ├── TokenBalance.tsx   # Custom balance display component
-│   └── utils.ts           # Chain-specific utilities
-├── baseHandler.ts         # Common utilities and base classes
-├── config.ts             # Chain configuration and RPC endpoints
-├── types.ts              # Shared type definitions
-└── index.ts             # Export all chain handlers
-```
+| Number | Chain              | Native Assets (Source) | Fungible Assets (Source) | NFTs (Source) | Chain Type |
+| ------ | ------------------ | ---------------------- | ------------------------ | ------------- | ---------- |
+| 20     | Abstract           | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
+| 21     | Apechain           | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
+| 22     | B3                 | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
+| 23     | Forma              | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
+| 24     | Proof of Play Boss | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
+| 25     | Rari               | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
+| 26     | Soneium            | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
+| 27     | Saakuru            | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
+| 28     | Shape              | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
+| 29     | Palm               | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | Sidechain  |
 
-## Implementation Requirements
+## Limited Support
 
-#### types.ts
-
-```typescript
-// Define chain-specific types
-export interface TokenBalance {
-  mint: string; // Token address/mint
-  symbol: string; // Token symbol
-  name: string; // Token name
-  decimals: number; // Token decimals
-  balance: string; // Raw balance
-  uiBalance: number; // Formatted balance
-  logoURI?: string; // Optional token logo
-}
-
-export interface TokenPrice {
-  price: number;
-  priceChange24h: number;
-}
-
-// Add any other chain-specific types
-```
-
-#### index.ts
-
-```typescript
-import { ChainHandler, TokenBalance, TokenPrice } from '../types';
-import { Cache, CACHE_TTL, CACHE_STALE_TIME } from '../baseHandler';
-import { getEndpoint } from '../config';
-
-// Initialize caches
-const balanceCache = new Cache<TokenBalance[]>(CACHE_TTL, CACHE_STALE_TIME);
-const priceCache = new Cache<Record<string, TokenPrice>>(CACHE_TTL, CACHE_STALE_TIME);
-
-export const chainHandler: ChainHandler = {
-    fetchBalances: async (publicKey: string) => {
-        // Implement balance fetching with caching
-        // Use error handling and retries
-    },
-
-    fetchPrices: async () => {
-        // Implement price fetching with caching
-    },
-
-    getExplorerUrl: (publicKey: string, accountId: string) => {
-        // Return block explorer URL
-    },
-
-    BalanceDisplay: // Implement display component
-
-    clearCache: () => {
-        balanceCache.clear();
-        priceCache.clear();
-    }
-};
-```
-
-## API Route Implementation
-
-Create `app/api/[chain]/route.ts`:
-
-```typescript
-import { NextResponse } from "next/server";
-import { validatePublicKey, handleRateLimit } from "@/lib/utils";
-
-export async function POST(req: Request) {
-  try {
-    // Validate request and public key
-    // Implement rate limiting
-    // Handle chain RPC calls
-    // Return formatted response
-  } catch (error) {
-    // Error handling
-  }
-}
-```
-
-## Configuration
-
-Update `lib/chains/config.ts`:
-
-```typescript
-export const CHAIN_CONFIG = {
-  [chain]: {
-    name: "Chain Name",
-    rpcEndpoint: process.env.CHAIN_RPC_ENDPOINT,
-    explorerUrl: "https://explorer...",
-    tokenListUrl: "https://token-list...",
-  },
-};
-```
-
-## Implementation Checklist
-
-- [ ] Implement types and interfaces
-- [ ] Create chain handler
-- [ ] Set up RPC integration
-- [ ] Configure token handling
-- [ ] Implement error handling
-- [ ] Set up caching
-- [ ] Add explorer integration
-- [ ] Update exports
-- [ ] Write documentation
-- [ ] Update main README
-
-## Example Implementations
-
-See these complete implementations for reference:
-
-- `solana/` - Complete implementation with SPL token support
-- `aptos/` - Move-based chain example
-- `sui/` - Alternative Move-based implementation
+| Number | Chain           | Native Assets (Source) | Fungible Assets (Source) | NFTs (Source) | Chain Type |
+| ------ | --------------- | ---------------------- | ------------------------ | ------------- | ---------- |
+| 30     | Avalanche       | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L1         |
+| 31     | Canto           | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L1         |
+| 32     | Fantom          | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L1         |
+| 33     | Arbitrum Nova   | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 34     | Godwoken        | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 35     | Immutable zkEVM | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 36     | Linea           | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 37     | Loot            | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 38     | Manta           | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 39     | Mode            | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 40     | opBNB           | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 41     | Polygon zkEVM   | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 42     | Proof of Play   | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 43     | Treasure        | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 44     | Xai             | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 45     | zkSync Era      | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | L2         |
+| 46     | BSC             | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | Sidechain  |
+| 47     | Moonbeam        | ✅ SimpleHash          | ❌                       | ✅ SimpleHash | Sidechain  |
+| 48     | Tezos           | ❌                     | ❌                       | ✅ SimpleHash | L1         |

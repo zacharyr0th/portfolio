@@ -234,7 +234,7 @@ function CexCardComponent({
       lastUpdated={lastFetchTime}
     >
       {!compact && isOpen && !isLoading && !error && (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 max-h-[250px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {filteredBalances.map((balance) => {
             const quantity = parseFloat(balance.balance);
             const price = balance.usdValue / quantity;
