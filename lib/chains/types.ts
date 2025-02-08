@@ -53,15 +53,59 @@ export type ChainTokenPrice = TokenPrice;
 
 // Supported chains
 export const CHAINS = [
+  // Layer 1s
   "aptos",
   "solana",
   "sui",
   "ethereum",
+  "bitcoin",
+  "tezos",
+  "flow",
+  "flow_evm",
+  "sei",
+
+  // EVM Layer 2s & Sidechains
   "polygon",
   "arbitrum",
+  "arbitrum_one",
   "optimism",
   "base",
+  "arbitrum_nova",
+  "avalanche",
+  "canto",
+  "fantom",
+  "blast",
+  "bsc",
+  "moonbeam",
+  "abstract",
+  "apechain",
+  "b3",
+  "forma",
+  "proof_of_play",
+  "proof_of_play_boss",
+  "rari",
+  "soneium",
+  "saakuru",
+  "shape",
+  "palm",
+  "cyber",
+  "mantle",
+  "scroll",
+  "zora",
+  "gnosis",
+  "godwoken",
+  "immutable_zkevm",
+  "linea",
+  "loot",
+  "manta",
+  "mode",
+  "opbnb",
+  "polygon_zkevm",
+  "treasure",
+  "xai",
+  "zksync_era",
 ] as const;
+
 export type ChainType = (typeof CHAINS)[number];
 
 // Props for balance display components

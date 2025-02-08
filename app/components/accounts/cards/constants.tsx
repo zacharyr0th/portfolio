@@ -123,6 +123,7 @@ export const CHAIN_ICONS = {
   "optimism-main": { src: "/icons/chain-icons/optimism.webp", opacity: 90 },
   base: { src: "/icons/chain-icons/base.webp", opacity: 90 },
   "base-main": { src: "/icons/chain-icons/base.webp", opacity: 90 },
+  sei: { src: "/icons/chain-icons/sei.webp", opacity: 90 },
 } as const;
 
 export const PLATFORM_ICONS: Readonly<

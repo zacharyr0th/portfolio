@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { BaseCard } from "../BaseCard";
 import { TokenBalance } from "../TokenBalance";
 import { Copy, Check, ExternalLink, Image as ImageIcon } from "lucide-react";
@@ -6,6 +6,7 @@ import type { WalletAccount } from "../types";
 import { useLocalStorage } from "@/lib/utils/hooks/useLocalStorage";
 import { logger } from "@/lib/utils/core/logger";
 import { NftModal } from "../modals/NftModal";
+import { cn } from "@/lib/utils";
 
 interface SolanaCardProps {
   account: WalletAccount;
@@ -185,27 +186,25 @@ export function SolanaCard({
     }
   }, [account.publicKey, account.id, onUpdateValue]);
 
-  // Initial fetch on mount
+  // Initial fetch on mount and refresh every 5 minutes
   useEffect(() => {
     fetchBalances();
+    const intervalId = setInterval(fetchBalances, 300000);
+    return () => clearInterval(intervalId);
   }, [fetchBalances]);
 
-  // Refresh when expanded and every 5 minutes while expanded
-  useEffect(() => {
-    if (isOpen) {
-      const intervalId = setInterval(fetchBalances, 300000); // Refresh every 5 minutes
-      return () => clearInterval(intervalId);
-    }
-    return () => {}; // Add return for when isOpen is false
-  }, [isOpen, fetchBalances]);
-
-  // Handle expanded state changes from parent
-  useEffect(() => {
-    setIsOpen(isExpanded);
-  }, [isExpanded]);
+  const filteredBalances = useMemo(() => {
+    const walletHidden = hiddenTokens[account.id] || [];
+    return tokenData.balances.filter((balance) => {
+      if (!showHiddenTokens && walletHidden.includes(balance.token.symbol)) {
+        return false;
+      }
+      return true;
+    });
+  }, [tokenData.balances, hiddenTokens, account.id, showHiddenTokens]);
 
   // Find SOL balance for display in title
-  const solBalance = tokenData.balances.find(
+  const solBalance = filteredBalances.find(
     (balance) => balance.token.symbol === "SOL",
   );
   const displayName = solBalance
@@ -248,11 +247,7 @@ export function SolanaCard({
                 className="p-1 hover:bg-accent rounded-md transition-colors"
                 aria-label="Copy address"
               >
-                {copied ? (
-                  <Check className="h-3.5 w-3.5 text-success" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                )}
+                <Copy className="h-3 w-3" />
               </button>
               <a
                 href={getExplorerUrl(account)}
@@ -264,8 +259,13 @@ export function SolanaCard({
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
               </a>
             </div>
-            <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              {tokenData.balances.map((balance) => {
+            <div
+              className={cn(
+                "flex flex-col gap-1",
+                "h-[186px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
+              )}
+            >
+              {filteredBalances.map((balance) => {
                 const walletHidden = hiddenTokens[account.id] || [];
                 const isHidden = walletHidden.includes(balance.token.symbol);
                 const price = Number(

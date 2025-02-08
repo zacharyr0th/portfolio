@@ -4,8 +4,8 @@ import { TokenBalance } from "../TokenBalance";
 import { Copy, Check, ExternalLink, Image as ImageIcon } from "lucide-react";
 import type { WalletAccount } from "../types";
 import { useLocalStorage } from "@/lib/utils/hooks/useLocalStorage";
-import { logger } from "@/lib/utils/core/logger";
 import { NftModal } from "../modals/NftModal";
+import { cn } from "@/lib/utils";
 
 interface TokenData {
   token: {
@@ -22,9 +22,11 @@ interface TokenData {
 }
 
 interface ApiResponse {
-  balances: TokenData[];
-  prices: Record<string, { price: number; timestamp: number }>;
-  totalValueUsd: number;
+  tokens: {
+    balances: TokenData[];
+    prices: Record<string, { price: number; timestamp: number }>;
+    totalValueUsd: number;
+  };
 }
 
 interface SeiCardProps {
@@ -89,9 +91,11 @@ export function SeiCard({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tokenData, setTokenData] = useState<ApiResponse>({
-    balances: [],
-    prices: {},
-    totalValueUsd: 0,
+    tokens: {
+      balances: [],
+      prices: {},
+      totalValueUsd: 0,
+    },
   });
   const [lastFetchTime, setLastFetchTime] = useState(0);
   const [hiddenTokens, setHiddenTokens] = useLocalStorage<
@@ -130,8 +134,11 @@ export function SeiCard({
       setIsLoading(true);
       setError(null);
 
+      // Log the address being used
+      console.log("Fetching balances for address:", account.publicKey);
+
       const response = await fetch(
-        `/api/sei/balance?address=${account.publicKey}`,
+        `/api/sei/balance?address=${encodeURIComponent(account.publicKey)}`,
       );
 
       if (!response.ok) {
@@ -140,39 +147,49 @@ export function SeiCard({
       }
 
       const data = await response.json();
+
+      // Log the response data to debug
+      console.log("Sei balance response:", data);
+
+      if (!data?.tokens?.balances) {
+        throw new Error("Invalid response format");
+      }
+
       setTokenData(data);
+      setError(null); // Clear any previous errors
 
       if (onUpdateValue) {
-        onUpdateValue(account.id, data.totalValueUsd || 0);
+        onUpdateValue(account.id, data.tokens.totalValueUsd || 0);
       }
 
       setLastFetchTime(Date.now());
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error("Error fetching Sei balances:", new Error(message));
+      console.error("Error fetching Sei balances:", message);
       setError(message);
     } finally {
       setIsLoading(false);
     }
   }, [account.publicKey, account.id, onUpdateValue]);
 
+  // Initial fetch on mount and refresh every 5 minutes
   useEffect(() => {
-    if (isOpen) {
-      fetchBalances();
-      const interval = setInterval(fetchBalances, REFRESH_INTERVAL);
-      return () => clearInterval(interval);
-    }
-    return undefined;
-  }, [isOpen, fetchBalances]);
+    fetchBalances();
+    const intervalId = setInterval(fetchBalances, 300000);
+    return () => clearInterval(intervalId);
+  }, [fetchBalances]);
 
   const filteredBalances = useMemo(() => {
-    if (!tokenData?.balances) return [];
+    if (!tokenData?.tokens?.balances) return [];
     const walletHidden = hiddenTokens[account.id] || [];
-    return tokenData.balances.filter((balance) => {
+    return tokenData.tokens.balances.filter((balance) => {
       if (!balance?.token?.symbol) return false;
-      return showHiddenTokens || !walletHidden.includes(balance.token.symbol);
+      if (!showHiddenTokens && walletHidden.includes(balance.token.symbol)) {
+        return false;
+      }
+      return true;
     });
-  }, [tokenData.balances, hiddenTokens, account.id, showHiddenTokens]);
+  }, [tokenData.tokens?.balances, hiddenTokens, account.id, showHiddenTokens]);
 
   // Find SEI balance for display in title
   const seiBalance = useMemo(() => {
@@ -188,8 +205,9 @@ export function SeiCard({
       <BaseCard
         account={{
           ...account,
-          value: tokenData.totalValueUsd,
+          value: tokenData.tokens?.totalValueUsd || 0,
           name: displayName,
+          chain: "sei",
         }}
         expanded={isOpen}
         onToggle={() => setIsOpen(!isOpen)}
@@ -225,7 +243,12 @@ export function SeiCard({
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
               </a>
             </div>
-            <div className="space-y-1 max-h-[200px] overflow-y-auto scrollbar-none [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:rounded-full">
+            <div
+              className={cn(
+                "flex flex-col gap-1",
+                "h-[186px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
+              )}
+            >
               {filteredBalances.map((balance) => (
                 <TokenBalance
                   key={balance.token.address}
@@ -236,7 +259,7 @@ export function SeiCard({
                     address: balance.token.address,
                   }}
                   quantity={balance.uiAmount}
-                  price={tokenData.prices[balance.token.symbol]?.price}
+                  price={tokenData.tokens.prices[balance.token.symbol]?.price}
                   showPrice={true}
                   canHide={true}
                   onHide={() => toggleHideToken(balance.token.symbol)}

@@ -3,6 +3,28 @@ import { logger } from "@/lib/utils/core/logger";
 import { isValidAddress } from "@/lib/chains/constants";
 import axios from "axios";
 
+// Add token mapping at the top of the file
+interface TokenInfo {
+  symbol: string;
+  name: string;
+}
+
+const TOKEN_MAPPING: Record<string, TokenInfo> = {
+  usei: { symbol: "SEI", name: "Sei" },
+  "ibc/8E27BA2D5493AF5636760E354E46004562C46AB7EC0CC4C1CA14E9E20E2545B5": {
+    symbol: "USDC",
+    name: "USD Coin",
+  },
+  "ibc/C4CFF46FD6DE35CA4CF4CE031E643C8FDC9BA4B99AE598E9B0ED98FE3A2319F9": {
+    symbol: "ATOM",
+    name: "Cosmos Hub ATOM",
+  },
+  "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518": {
+    symbol: "OSMO",
+    name: "Osmosis",
+  },
+};
+
 // Security headers
 const SECURITY_HEADERS = {
   "Content-Security-Policy": [
@@ -79,10 +101,6 @@ export async function GET(req: Request) {
       return createErrorResponse("Missing required parameter: address");
     }
 
-    if (!isValidAddress("sei", address)) {
-      return createErrorResponse("Invalid Sei address format");
-    }
-
     // Get the QuickNode endpoint from environment variables
     const quicknodeEndpoint = process.env.QUICKNODE_SEI_ENDPOINT;
     if (!quicknodeEndpoint) {
@@ -98,24 +116,85 @@ export async function GET(req: Request) {
       return createErrorResponse("Failed to fetch balances");
     }
 
+    // Get unique tokens from balances
+    const uniqueTokens = response.data.balances
+      .map((balance: any) => {
+        const mapping = TOKEN_MAPPING[balance.denom];
+        return mapping?.symbol || null;
+      })
+      .filter(Boolean);
+
+    // Fetch prices from CMC for all supported tokens
+    const prices: Record<string, number> = {};
+    if (uniqueTokens.length > 0) {
+      try {
+        const cmcResponse = await axios.get(
+          "https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest",
+          {
+            headers: {
+              "X-CMC_PRO_API_KEY": process.env.CMC_API_KEY,
+            },
+            params: {
+              symbol: uniqueTokens.join(","),
+              convert: "USD",
+            },
+          },
+        );
+
+        // Extract prices for each token
+        Object.entries(cmcResponse.data?.data || {}).forEach(
+          ([symbol, data]: [string, any]) => {
+            if (data?.[0]?.quote?.USD?.price) {
+              prices[symbol] = data[0].quote.USD.price;
+            }
+          },
+        );
+      } catch (error) {
+        logger.error(
+          "Failed to fetch token prices from CMC:",
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
+    }
+
     // Transform the response to match the expected format
+    const balances = response.data.balances.map((balance: any) => {
+      const mapping = TOKEN_MAPPING[balance.denom];
+      const uiAmount = parseFloat(balance.amount) / Math.pow(10, 6);
+      const symbol = mapping?.symbol || balance.denom;
+
+      return {
+        token: {
+          symbol,
+          name: mapping?.name || balance.denom,
+          decimals: 6,
+          address: balance.denom,
+          chain: "sei",
+          type: balance.denom === "usei" ? "sei" : "token",
+        },
+        balance: balance.amount,
+        uiAmount,
+        valueUsd: prices[symbol] ? uiAmount * prices[symbol] : 0,
+      };
+    });
+
     const transformedData = {
       tokens: {
-        balances: response.data.balances.map((balance: any) => ({
-          token: {
-            symbol: balance.denom,
-            name: balance.denom,
-            decimals: 6, // Sei uses 6 decimals by default
-            address: "", // Native tokens don't have addresses
-            chain: "sei",
-            type: "sei",
-          },
-          balance: balance.amount,
-          uiAmount: parseFloat(balance.amount) / Math.pow(10, 6),
-          valueUsd: 0, // We'll need to fetch prices separately
-        })),
-        prices: {},
-        totalValueUsd: 0,
+        balances,
+        prices: Object.entries(prices).reduce(
+          (acc, [symbol, price]) => ({
+            ...acc,
+            [symbol]: {
+              price,
+              timestamp: Date.now(),
+            },
+          }),
+          {},
+        ),
+        totalValueUsd: balances.reduce(
+          (sum: number, b: { valueUsd: number }) => sum + b.valueUsd,
+          0,
+        ),
       },
     };
 

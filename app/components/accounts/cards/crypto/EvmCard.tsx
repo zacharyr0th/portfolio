@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { BaseCard } from "../BaseCard";
 import { TokenBalance } from "../TokenBalance";
 import { Copy, Check, ExternalLink, Image as ImageIcon } from "lucide-react";
@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 interface EvmCardProps {
   account: WalletAccount;
@@ -240,15 +241,12 @@ export function EvmCard({
     }
   }, [account.publicKey, account.id, onUpdateValue, selectedChain]);
 
-  // Fetch balances on mount and when expanded
+  // Initial fetch on mount and refresh every 5 minutes
   useEffect(() => {
-    if (isOpen) {
-      fetchBalances();
-      const intervalId = setInterval(fetchBalances, 300000); // Refresh every 5 minutes
-      return () => clearInterval(intervalId);
-    }
-    return undefined;
-  }, [isOpen, fetchBalances]);
+    fetchBalances();
+    const intervalId = setInterval(fetchBalances, 300000);
+    return () => clearInterval(intervalId);
+  }, [fetchBalances]);
 
   // Handle expanded state changes from parent
   useEffect(() => {
@@ -260,6 +258,37 @@ export function EvmCard({
     // This will trigger a re-fetch due to the dependency in fetchBalances
   };
 
+  const filteredBalances = useMemo(() => {
+    const walletHidden = hiddenTokens[account.id] || [];
+    return tokenData.balances.filter((balance) => {
+      if (!showHiddenTokens && walletHidden.includes(balance.token.symbol)) {
+        return false;
+      }
+      return true;
+    });
+  }, [tokenData.balances, hiddenTokens, account.id, showHiddenTokens]);
+
+  // Find native token balance for display in title
+  const nativeToken = useMemo(() => {
+    const chainConfig = CHAIN_CONFIG[selectedChain];
+    if (!chainConfig?.nativeCurrency) return null;
+
+    return filteredBalances.find(
+      (balance) =>
+        balance.token.address ===
+          "0x0000000000000000000000000000000000000000" &&
+        balance.token.symbol.toUpperCase() ===
+          chainConfig.nativeCurrency.symbol,
+    );
+  }, [filteredBalances, selectedChain]);
+
+  const displayName = useMemo(() => {
+    if (!nativeToken) return account.name;
+    const amount =
+      Number(nativeToken.balance) / Math.pow(10, nativeToken.token.decimals);
+    return `${account.name} (${formatLargeNumber(amount)} ${nativeToken.token.symbol})`;
+  }, [account.name, nativeToken]);
+
   return (
     <>
       <BaseCard
@@ -270,6 +299,7 @@ export function EvmCard({
             const price = tokenData.prices[balance.token.symbol]?.price || 0;
             return sum + balance.uiAmount * price;
           }, 0),
+          name: displayName,
         }}
         expanded={isOpen}
         onToggle={() => setIsOpen(!isOpen)}
@@ -323,8 +353,13 @@ export function EvmCard({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              {tokenData.balances.map((balance) => {
+            <div
+              className={cn(
+                "flex flex-col gap-1",
+                "h-[186px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
+              )}
+            >
+              {filteredBalances.map((balance) => {
                 const walletHidden = hiddenTokens[account.id] || [];
                 const isHidden = walletHidden.includes(balance.token.symbol);
                 const price = Number(

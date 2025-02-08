@@ -6,6 +6,7 @@ import { TokenBalance } from "../TokenBalance";
 import { exchangeHandlers, type SupportedExchange } from "@/lib/cex";
 import { logger } from "@/lib/utils/core/logger";
 import { useLocalStorage } from "@/lib/utils/hooks/useLocalStorage";
+import { cn } from "@/lib/utils";
 
 // Constants
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
@@ -40,6 +41,7 @@ function CexCardComponent({
   isExpanded = false,
   onUpdateValue,
   showHiddenTokens = false,
+  onToggleExpand,
 }: CexCardProps) {
   const [balances, setBalances] = useState<TokenBalanceData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -227,19 +229,31 @@ function CexCardComponent({
         value: totalValueState,
       }}
       expanded={isOpen}
-      onToggle={() => setIsOpen(!isOpen)}
+      onToggle={() => {
+        setIsOpen(!isOpen);
+        onToggleExpand?.();
+      }}
       variant={compact ? "compact" : "detailed"}
       isLoading={isLoading}
       error={error}
       lastUpdated={lastFetchTime}
     >
       {!compact && isOpen && !isLoading && !error && (
-        <div className="flex flex-col gap-1 max-h-[250px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <div
+          className={cn(
+            "flex flex-col gap-1",
+            "max-h-[204px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
+          )}
+        >
           {filteredBalances.map((balance) => {
             const quantity = parseFloat(balance.balance);
             const price = balance.usdValue / quantity;
             const accountHidden = hiddenTokens[account.id] || [];
             const isHidden = accountHidden.includes(balance.token.symbol);
+
+            if (!showHiddenTokens && isHidden) {
+              return null;
+            }
 
             // Create a more unique key using address if available
             const tokenAddress =

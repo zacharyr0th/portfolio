@@ -102,6 +102,17 @@ export function AccountList({
   className,
 }: AccountListProps) {
   const [expandedState, setExpandedState] = useState(false);
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>(
+    {},
+  );
+
+  const handleCardToggle = useCallback((accountId: string) => {
+    setExpandedCards((prev) => ({
+      ...prev,
+      [accountId]: !prev[accountId],
+    }));
+  }, []);
+
   const {
     filters,
     setActiveFilter,
@@ -226,9 +237,12 @@ export function AccountList({
             key={account.id}
             account={account}
             compact={variant === "compact"}
-            isExpanded={allowExpandAll ? expandedState : undefined}
+            isExpanded={
+              allowExpandAll ? expandedState : expandedCards[account.id]
+            }
             onUpdateValue={handleAccountValueUpdate}
             showHiddenTokens={filters.showHiddenTokens}
+            onToggleExpand={() => handleCardToggle(account.id)}
           />
         ))}
       </div>

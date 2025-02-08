@@ -14,6 +14,8 @@ import type { WalletAccount, ChainType } from "../types";
 import { logger } from "@/lib/utils/core/logger";
 import { useLocalStorage } from "@/lib/utils/hooks/useLocalStorage";
 import { EVM_CHAINS } from "@/lib/chains/evm+/types";
+import { cn } from "@/lib/utils";
+import { formatLargeNumber } from "@/lib/utils/formatLargeNumber";
 
 // Constants
 const COPY_TIMEOUT_MS = 2000;
@@ -418,21 +420,19 @@ function WalletCardComponent({
     ],
   );
 
+  // Initial fetch on mount
   useEffect(() => {
-    if (account.chain && account.publicKey && chainHandler) {
-      fetchData();
-      const intervalId = setInterval(
-        () => fetchData(false),
-        MAX_REFRESH_INTERVAL,
-      );
-      return () => {
-        clearInterval(intervalId);
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-        }
-      };
-    }
-    return undefined;
+    fetchData();
+    const intervalId = setInterval(
+      () => fetchData(false),
+      MAX_REFRESH_INTERVAL,
+    );
+    return () => {
+      clearInterval(intervalId);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [account.chain, account.publicKey, chainHandler, fetchData]);
 
   // Helper function for token value calculation
@@ -446,7 +446,7 @@ function WalletCardComponent({
     return amount * price;
   };
 
-  // Optimize filtered balances calculation
+  // Remove isOpen dependency from filteredBalances
   const filteredBalances = useMemo(() => {
     const walletHidden = hiddenTokens[account.id] || [];
     return tokenData.balances
@@ -539,12 +539,31 @@ function WalletCardComponent({
     }
   }, []);
 
+  // Find native token balance for display in title
+  const nativeToken = useMemo(() => {
+    const chainInfo = getChainInfo(account.chain);
+    if (!chainInfo?.nativeCurrency) return null;
+
+    return filteredBalances.find(
+      (balance) =>
+        balance.token.symbol.toUpperCase() === chainInfo.nativeCurrency.symbol,
+    );
+  }, [filteredBalances, account.chain]);
+
+  const displayName = useMemo(() => {
+    if (!nativeToken) return account.name;
+    const amount =
+      Number(nativeToken.balance) / Math.pow(10, nativeToken.token.decimals);
+    return `${account.name} (${formatLargeNumber(amount)} ${nativeToken.token.symbol})`;
+  }, [account.name, nativeToken]);
+
   return (
     <>
       <BaseCard
         account={{
           ...account,
           value: totalValue,
+          name: displayName,
         }}
         expanded={isOpen}
         onToggle={() => setIsOpen(!isOpen)}
@@ -580,7 +599,12 @@ function WalletCardComponent({
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
               </a>
             </div>
-            <div className="flex flex-col gap-1">
+            <div
+              className={cn(
+                "flex flex-col gap-1",
+                "max-h-[153px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
+              )}
+            >
               {filteredBalances.map((balance) => {
                 const amount =
                   Number(balance.balance) /

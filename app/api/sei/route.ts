@@ -143,14 +143,41 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const address = searchParams.get("address");
 
+    logger.info("Received Sei balance request", { address });
+
     if (!address) {
+      logger.error("Missing address parameter");
       return createErrorResponse("Missing required parameter: address");
     }
+
+    // Validate Sei address format
+    const seiAddressRegex = /^sei1[a-zA-Z0-9]{40}$/;
+    if (!seiAddressRegex.test(address)) {
+      logger.error(
+        "Invalid Sei address format",
+        new Error(`Invalid address: ${address}`),
+      );
+      return createErrorResponse("Invalid Sei address format");
+    }
+
+    logger.info("Fetching Sei balances from QuickNode", {
+      address,
+      endpoint: process.env.QUICKNODE_SEI_ENDPOINT,
+      apiKey: process.env.QUICKNODE_API_KEY ? "configured" : "missing",
+    });
 
     // Fetch balances using QuickNode
     const balanceResult = (await quicknode.callFunction("sei-balance", {
       address,
     })) as { data: SeiBalanceResponse };
+
+    if (!balanceResult?.data?.balances) {
+      logger.error(
+        "Invalid balance response from QuickNode",
+        new Error(JSON.stringify(balanceResult)),
+      );
+      return createErrorResponse("Invalid response from balance service");
+    }
 
     // Transform the response to match the expected format
     const transformedData = {
@@ -192,11 +219,19 @@ export async function GET(req: Request) {
       },
     };
 
+    logger.info("Successfully fetched Sei balances", {
+      address,
+      tokenCount: balanceResult.data.balances.length,
+    });
+
     return createSuccessResponse(transformedData);
   } catch (error) {
     const err =
       error instanceof Error ? error : new Error("Internal server error");
-    logger.error("Error fetching Sei balances:", err);
+    logger.error("Error fetching Sei balances:", err, {
+      error: err.message,
+      stack: err.stack,
+    });
     return createErrorResponse(err.message, error instanceof Error ? 400 : 500);
   }
 }

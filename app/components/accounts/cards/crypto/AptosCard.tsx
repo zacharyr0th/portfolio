@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { BaseCard } from "../BaseCard";
 import { TokenBalance } from "../TokenBalance";
 import { Copy, Check, ExternalLink, Image as ImageIcon } from "lucide-react";
@@ -6,6 +6,7 @@ import type { WalletAccount } from "../types";
 import { useLocalStorage } from "@/lib/utils/hooks/useLocalStorage";
 import { logger } from "@/lib/utils/core/logger";
 import { NftModal } from "../modals/NftModal";
+import { cn } from "@/lib/utils";
 
 interface TokenData {
   token: {
@@ -125,16 +126,22 @@ export function AptosCard({
     }
   }, [account.publicKey, account.id, onUpdateValue]);
 
+  // Initial fetch on mount and refresh every 5 minutes
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 60000);
-    return () => clearInterval(interval);
+    const intervalId = setInterval(fetchData, 300000);
+    return () => clearInterval(intervalId);
   }, [fetchData]);
 
-  const filteredBalances = tokenData.balances.filter((balance) => {
+  const filteredBalances = useMemo(() => {
     const walletHidden = hiddenTokens[account.id] || [];
-    return showHiddenTokens || !walletHidden.includes(balance.token.symbol);
-  });
+    return tokenData.balances.filter((balance) => {
+      if (!showHiddenTokens && walletHidden.includes(balance.token.symbol)) {
+        return false;
+      }
+      return true;
+    });
+  }, [tokenData.balances, hiddenTokens, account.id, showHiddenTokens]);
 
   const toggleHideToken = useCallback(
     (symbol: string) => {
@@ -202,7 +209,12 @@ export function AptosCard({
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
               </a>
             </div>
-            <div className="space-y-1 max-h-[200px] overflow-y-auto scrollbar-none [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:rounded-full">
+            <div
+              className={cn(
+                "flex flex-col gap-1",
+                "h-[186px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
+              )}
+            >
               {filteredBalances.map((balance) => {
                 const price =
                   tokenData.prices[balance.token.type]?.price ||

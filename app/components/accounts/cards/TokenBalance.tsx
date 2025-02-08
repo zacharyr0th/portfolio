@@ -366,7 +366,7 @@ function TokenBalanceComponent({
             isNativeToken ? "text-foreground/90" : "text-muted-foreground",
           )}
         >
-          {displayQuantity}
+          {displayQuantity} {displaySymbol}
         </span>
       </div>
 

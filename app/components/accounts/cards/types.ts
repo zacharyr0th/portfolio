@@ -28,6 +28,7 @@ export const CHAINS = [
   "arbitrum",
   "optimism",
   "base",
+  "sei",
 ] as const satisfies readonly string[];
 
 export const BROKER_CATEGORIES = [
@@ -341,4 +342,5 @@ export interface AccountCardProps {
   readonly isExpanded?: boolean;
   readonly onUpdateValue?: (id: string, value: number) => void;
   readonly showHiddenTokens?: boolean;
+  readonly onToggleExpand?: () => void;
 }

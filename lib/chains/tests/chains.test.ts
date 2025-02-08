@@ -10,6 +10,8 @@ import {
   ADDRESS_REGEX,
   CHAIN_CROSS_IDS,
 } from "../constants";
+import { ChainInfo } from "../config";
+import { ChainType } from "../types";
 
 // Mock all chain handlers and their dependencies
 jest.mock("../solana", () => ({
@@ -104,6 +106,325 @@ async function retryRequest(
     throw error;
   }
 }
+
+interface ChainTestConfig {
+  name: string;
+  chainType: "L1" | "L2" | "Sidechain";
+  nativeAssets?: string;
+  fungibleAssets?: string;
+  nfts?: string;
+}
+
+interface TokenSourceConfig {
+  nativeSource: string;
+  fungibleSource: string;
+}
+
+interface NFTSourceConfig {
+  source: string;
+}
+
+const fullSupportChains: ChainTestConfig[] = [
+  {
+    name: "Aptos",
+    chainType: "L1",
+    nativeAssets: "Panora",
+    fungibleAssets: "Aptos Fullnode",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Ethereum",
+    chainType: "L1",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Solana",
+    chainType: "L1",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Bitcoin",
+    chainType: "L1",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Flow",
+    chainType: "L1",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Celo",
+    chainType: "L1",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Arbitrum One",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Base",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Blast",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Cyber",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Mantle",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Optimism",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Scroll",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Flow EVM",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Zora",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Polygon",
+    chainType: "Sidechain",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Gnosis",
+    chainType: "Sidechain",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+];
+
+const nativeFungibleChains: ChainTestConfig[] = [
+  {
+    name: "Abstract",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+  },
+  {
+    name: "Apechain",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+  },
+  {
+    name: "B3",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+  },
+  {
+    name: "Forma",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+  },
+  {
+    name: "Proof of Play Boss",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+  },
+  {
+    name: "Rari",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+  },
+  {
+    name: "Soneium",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+  },
+  {
+    name: "Saakuru",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+  },
+  {
+    name: "Shape",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+  },
+  {
+    name: "Palm",
+    chainType: "Sidechain",
+    nativeAssets: "SimpleHash",
+    fungibleAssets: "SimpleHash",
+  },
+];
+
+const limitedSupportChains: ChainTestConfig[] = [
+  {
+    name: "Avalanche",
+    chainType: "L1",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Canto",
+    chainType: "L1",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Fantom",
+    chainType: "L1",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Arbitrum Nova",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Godwoken",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Immutable zkEVM",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Linea",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Loot",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Manta",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Mode",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "opBNB",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Polygon zkEVM",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Proof of Play",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Treasure",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Xai",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "zkSync Era",
+    chainType: "L2",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "BSC",
+    chainType: "Sidechain",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  {
+    name: "Moonbeam",
+    chainType: "Sidechain",
+    nativeAssets: "SimpleHash",
+    nfts: "SimpleHash",
+  },
+  { name: "Tezos", chainType: "L1", nfts: "SimpleHash" },
+];
+
+const specialChains: ChainTestConfig[] = [
+  { name: "Sei", chainType: "L1", nfts: "SimpleHash" },
+  { name: "Sui", chainType: "L1", nfts: "SimpleHash" },
+];
 
 describe("Chain Configuration Tests", () => {
   // Clear caches before all tests
@@ -425,6 +746,143 @@ describe("Chain Configuration Tests", () => {
           expect(info.isTestnet).toBe(false); // All chains should be mainnet
           expect(chain).toBe(chain.toLowerCase()); // Chain ID should be lowercase
         });
+      });
+    });
+  });
+});
+
+describe("Chain Support Level Tests", () => {
+  describe("Full Support Chains (Native Assets, Fungible Assets, and NFTs)", () => {
+    fullSupportChains.forEach((chain) => {
+      describe(`${chain.name} Full Support Tests`, () => {
+        const chainKey = chain.name
+          .toLowerCase()
+          .replace(/\s+/g, "")
+          .replace(/one$/, "") as ChainType;
+
+        it("should have complete feature support", () => {
+          const info = chainInfo[chainKey];
+          expect(info.features.hasNFTs).toBe(true);
+          expect(info.features.hasDeFi).toBe(true);
+          expect(info.features.hasSmartContracts).toBe(true);
+        });
+
+        it("should have correct data sources", () => {
+          if (chain.name === "Aptos") {
+            expect(chain.nativeAssets).toBe("Panora");
+            expect(chain.fungibleAssets).toBe("Aptos Fullnode");
+          } else {
+            expect(chain.nativeAssets).toBe("SimpleHash");
+            expect(chain.fungibleAssets).toBe("SimpleHash");
+          }
+          expect(chain.nfts).toBe("SimpleHash");
+        });
+      });
+    });
+  });
+
+  describe("Native and Fungible Assets Only Chains (No NFTs)", () => {
+    nativeFungibleChains.forEach((chain) => {
+      describe(`${chain.name} Native+Fungible Support Tests`, () => {
+        const chainKey = chain.name
+          .toLowerCase()
+          .replace(/\s+/g, "")
+          .replace(/one$/, "") as ChainType;
+
+        it("should have correct feature support", () => {
+          const info = chainInfo[chainKey];
+          expect(info.features.hasNFTs).toBe(false);
+          expect(info.features.hasDeFi).toBe(true);
+          expect(info.features.hasSmartContracts).toBe(true);
+        });
+
+        it("should have SimpleHash as data source", () => {
+          expect(chain.nativeAssets).toBe("SimpleHash");
+          expect(chain.fungibleAssets).toBe("SimpleHash");
+        });
+      });
+    });
+  });
+
+  describe("Limited Support Chains (Native Assets and NFTs Only)", () => {
+    limitedSupportChains.forEach((chain) => {
+      describe(`${chain.name} Limited Support Tests`, () => {
+        const chainKey = chain.name
+          .toLowerCase()
+          .replace(/\s+/g, "")
+          .replace(/one$/, "") as ChainType;
+
+        it("should have correct feature support", () => {
+          const info = chainInfo[chainKey];
+          expect(info.features.hasNFTs).toBe(true);
+          expect(info.features.hasDeFi).toBe(false);
+        });
+
+        it("should have correct native asset support", () => {
+          if (chain.name === "Tezos") {
+            expect(chain.nativeAssets).toBeUndefined();
+          } else {
+            expect(chain.nativeAssets).toBe("SimpleHash");
+          }
+        });
+
+        it("should have SimpleHash as NFT data source", () => {
+          expect(chain.nfts).toBe("SimpleHash");
+        });
+      });
+    });
+  });
+});
+
+describe("Special Chain Tests", () => {
+  describe("Sei and Sui (NFT Support Only)", () => {
+    specialChains.forEach((chain) => {
+      it(`${chain.name} should only support NFTs through SimpleHash`, () => {
+        const chainKey = chain.name
+          .toLowerCase()
+          .replace(/\s+/g, "")
+          .replace(/one$/, "") as ChainType;
+        const info = chainInfo[chainKey];
+        expect(info.features.hasNFTs).toBe(true);
+        expect(info.features.hasDeFi).toBe(false);
+
+        expect(chain.nfts).toBe("SimpleHash");
+        expect(chain.nativeAssets).toBeUndefined();
+        expect(chain.fungibleAssets).toBeUndefined();
+      });
+    });
+  });
+
+  describe("Chain Type Distribution (L1, L2, Sidechain)", () => {
+    it("should have correct distribution of chain types", () => {
+      const chainTypes = fullSupportChains
+        .concat(nativeFungibleChains, limitedSupportChains, specialChains)
+        .reduce<Record<string, number>>((acc, chain) => {
+          acc[chain.chainType] = (acc[chain.chainType] || 0) + 1;
+          return acc;
+        }, {});
+
+      // Based on README.md
+      expect(chainTypes["L1"]).toBeGreaterThanOrEqual(8); // Aptos, Ethereum, Solana, Bitcoin, Flow, Celo, etc.
+      expect(chainTypes["L2"]).toBeGreaterThanOrEqual(25); // Arbitrum One, Base, Blast, etc.
+      expect(chainTypes["Sidechain"]).toBeGreaterThanOrEqual(4); // Polygon, Gnosis, Palm, BSC
+    });
+  });
+
+  describe("Data Source Distribution (SimpleHash vs Others)", () => {
+    it("should use correct data sources for each chain", () => {
+      const aptosChain = fullSupportChains.find(
+        (chain) => chain.name === "Aptos",
+      );
+      expect(aptosChain?.nativeAssets).toBe("Panora");
+      expect(aptosChain?.fungibleAssets).toBe("Aptos Fullnode");
+
+      // All other chains should use SimpleHash
+      fullSupportChains.forEach((chain) => {
+        if (chain.name !== "Aptos") {
+          expect(chain.nativeAssets).toBe("SimpleHash");
+          expect(chain.fungibleAssets).toBe("SimpleHash");
+        }
       });
     });
   });

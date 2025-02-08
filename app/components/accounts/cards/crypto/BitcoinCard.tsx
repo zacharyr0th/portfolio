@@ -6,6 +6,7 @@ import type { WalletAccount } from "../types";
 import { useLocalStorage } from "@/lib/utils/hooks/useLocalStorage";
 import { logger } from "@/lib/utils/core/logger";
 import { NftModal } from "../modals/NftModal";
+import { cn } from "@/lib/utils";
 
 interface BitcoinCardProps {
   account: WalletAccount;
@@ -198,7 +199,12 @@ export function BitcoinCard({
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
               </a>
             </div>
-            <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div
+              className={cn(
+                "flex flex-col gap-1",
+                "h-[186px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
+              )}
+            >
               {filteredBalances.map((balance) => {
                 const amount =
                   Number(balance.balance) /
