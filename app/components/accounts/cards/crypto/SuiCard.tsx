@@ -6,6 +6,9 @@ import type { WalletAccount } from "../types";
 import { useLocalStorage } from "@/lib/utils/hooks/useLocalStorage";
 import { NftModal } from "../modals/NftModal";
 import { cn } from "@/lib/utils";
+import { NFTBalance } from "@/lib/data/simplehash";
+import { getSuiNFTs } from "@/lib/chains/sui/nft-handler";
+import { logger } from "@/lib/utils/core/logger";
 
 interface TokenData {
   tokens: {
@@ -84,6 +87,9 @@ export function SuiCard({
   const [hiddenTokens, setHiddenTokens] = useLocalStorage<
     Record<string, string[]>
   >("hidden-tokens", {});
+  const [nfts, setNfts] = useState<NFTBalance[]>([]);
+  const [isLoadingNfts, setIsLoadingNfts] = useState(true);
+  const [nftError, setNftError] = useState<string | null>(null);
 
   // Handle expanded state changes
   useEffect(() => {
@@ -182,6 +188,36 @@ export function SuiCard({
     ? `${account.name} (${formatLargeNumber(suiBalance.uiAmount)} SUI)`
     : account.name;
 
+  // Add NFT fetching
+  useEffect(() => {
+    async function fetchNFTs() {
+      setIsLoadingNfts(true);
+      setNftError(null);
+      try {
+        const result = await getSuiNFTs(account.publicKey);
+        if (result.error) {
+          setNftError(result.error);
+        } else {
+          setNfts(result.nfts);
+        }
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to fetch NFTs";
+        logger.error(
+          "Error fetching Sui NFTs",
+          err instanceof Error ? err : new Error(String(err)),
+        );
+        setNftError(errorMessage);
+      } finally {
+        setIsLoadingNfts(false);
+      }
+    }
+
+    if (account.publicKey) {
+      fetchNFTs();
+    }
+  }, [account.publicKey]);
+
   return (
     <>
       <BaseCard
@@ -253,13 +289,27 @@ export function SuiCard({
               ))}
             </div>
             <div className="flex items-center gap-2 mt-4">
-              <button
-                onClick={() => setShowNftModal(true)}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ImageIcon className="h-3.5 w-3.5" />
-                View NFTs
-              </button>
+              {isLoadingNfts ? (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  Loading NFTs...
+                </div>
+              ) : nfts?.length > 0 ? (
+                <button
+                  onClick={() => setShowNftModal(true)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  View {nfts.length} NFTs on Sui
+                </button>
+              ) : (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  {nftError
+                    ? `Error loading NFTs: ${nftError}`
+                    : "No NFTs in this wallet"}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -271,6 +321,10 @@ export function SuiCard({
           walletAddress={account.publicKey}
           chain="sui"
           onClose={() => setShowNftModal(false)}
+          nfts={nfts}
+          isLoading={isLoadingNfts}
+          error={nftError}
+          emptyMessage="No NFTs found in this wallet"
         />
       )}
     </>

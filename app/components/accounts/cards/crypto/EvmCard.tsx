@@ -13,6 +13,8 @@ import type { WalletAccount } from "../types";
 import { useLocalStorage } from "@/lib/utils/hooks/useLocalStorage";
 import { logger } from "@/lib/utils/core/logger";
 import { NftModal } from "../modals/NftModal";
+import { useBalanceFetcher } from "@/app/hooks/use-balance-fetcher";
+import { NFTBalance } from "@/lib/data/simplehash";
 import {
   Select,
   SelectContent,
@@ -43,7 +45,27 @@ interface TokenData {
     balance: string;
     uiAmount: number;
   }>;
-  prices: Record<string, { price: number; timestamp: number }>;
+  prices: Record<
+    string,
+    {
+      price: number;
+      timestamp: number;
+      noPriceData?: boolean;
+    }
+  >;
+  totalValueUsd: number;
+  timestamp?: number;
+}
+
+interface TokenBalanceProps {
+  symbol: string;
+  name: string;
+  balance: number;
+  value?: number;
+  verified: boolean;
+  address: string;
+  chain: EvmChainType;
+  onHide?: () => void;
 }
 
 // Format large numbers to K/M/B format with 2 decimal places
@@ -131,19 +153,137 @@ export function EvmCard({
   const [copied, setCopied] = useState(false);
   const [isOpen, setIsOpen] = useState(isExpanded);
   const [showNftModal, setShowNftModal] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [tokenData, setTokenData] = useState<TokenData>({
-    balances: [],
-    prices: {},
-  });
-  const [lastFetchTime, setLastFetchTime] = useState(0);
   const [hiddenTokens, setHiddenTokens] = useLocalStorage<
     Record<string, string[]>
   >("hidden-tokens", {});
   const [selectedChain, setSelectedChain] = useState<EvmChainType>(() =>
     getInitialChain(account.chain),
   );
+  const [nfts, setNfts] = useState<NFTBalance[]>([]);
+  const [isLoadingNfts, setIsLoadingNfts] = useState(true);
+  const [nftError, setNftError] = useState<string | null>(null);
+
+  const fetchNfts = useCallback(async () => {
+    try {
+      setIsLoadingNfts(true);
+      setNftError(null);
+
+      let allNfts: NFTBalance[] = [];
+      let hasMore = true;
+      let cursor: string | undefined;
+
+      // First fetch
+      const initialNftUrl = `/api/simplehash?wallet=${account.publicKey}&chain=${selectedChain}&limit=500&order_by=transfer_time__desc`;
+      const initialResponse = await fetch(initialNftUrl);
+      const initialData = await initialResponse.json();
+
+      if (initialData && initialData.nfts) {
+        allNfts = [...initialData.nfts];
+        cursor = initialData.next_cursor;
+        hasMore = Boolean(cursor);
+
+        // Keep fetching while we have more pages
+        while (hasMore && cursor) {
+          const nftUrl = `/api/simplehash?wallet=${account.publicKey}&chain=${selectedChain}&limit=500&cursor=${cursor}&order_by=transfer_time__desc`;
+          const nftResponse = await fetch(nftUrl);
+
+          if (!nftResponse.ok) {
+            throw new Error(
+              `Failed to fetch NFTs page: HTTP ${nftResponse.status}`,
+            );
+          }
+
+          const nftData = await nftResponse.json();
+
+          if (!nftData || !nftData.nfts) {
+            throw new Error("Invalid NFT data received");
+          }
+
+          allNfts = [...allNfts, ...nftData.nfts];
+
+          if (nftData.next_cursor) {
+            cursor = nftData.next_cursor;
+          } else {
+            hasMore = false;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+
+        setNfts(allNfts);
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to fetch NFTs";
+      logger.error(
+        "Error fetching EVM NFTs",
+        err instanceof Error ? err : new Error(String(err)),
+      );
+      setNftError(errorMessage);
+    } finally {
+      setIsLoadingNfts(false);
+    }
+  }, [account.publicKey, selectedChain]);
+
+  useEffect(() => {
+    if (supportsTokensAndNfts(selectedChain)) {
+      fetchNfts();
+    }
+  }, [fetchNfts, selectedChain]);
+
+  const fetchBalances = useCallback(async () => {
+    const chainName = selectedChain.replace("-main", "");
+    const response = await fetch(
+      `/api/evm/balance?address=${account.publicKey}&chain=${chainName}`,
+    );
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || "Failed to fetch balances");
+    }
+
+    const data = await response.json();
+
+    // Normalize the price data to ensure correct values
+    const normalizedPrices = Object.fromEntries(
+      Object.entries(
+        data.prices as Record<string, { price: number; timestamp: number }>,
+      ).map(([symbol, priceData]) => [
+        symbol,
+        {
+          price: Number(priceData.price),
+          timestamp: priceData.timestamp,
+        },
+      ]),
+    );
+
+    return {
+      balances: data.balances,
+      prices: normalizedPrices,
+      totalValueUsd: data.totalValueUsd || 0,
+    };
+  }, [account.publicKey, selectedChain]);
+
+  const handleSuccess = useCallback(
+    (data: TokenData) => {
+      // Use the total value directly from SimpleHash
+      if (onUpdateValue) {
+        onUpdateValue(account.id, data.totalValueUsd);
+      }
+    },
+    [account.id, onUpdateValue],
+  );
+
+  const {
+    data: tokenData,
+    error,
+    isLoading,
+  } = useBalanceFetcher<TokenData>({
+    accountId: `${account.id}-${selectedChain}`,
+    fetchFn: fetchBalances,
+    onSuccess: handleSuccess,
+    enabled: true,
+  });
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(account.publicKey);
@@ -182,72 +322,6 @@ export function EvmCard({
     [account.id, setHiddenTokens],
   );
 
-  // Fetch balances from the API
-  const fetchBalances = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const chainName = selectedChain.replace("-main", "");
-      const response = await fetch(
-        `/api/evm/balance?address=${account.publicKey}&chain=${chainName}`,
-      );
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to fetch balances");
-      }
-
-      const data = await response.json();
-
-      // Normalize the price data to ensure correct values
-      const normalizedPrices = Object.fromEntries(
-        Object.entries(
-          data.prices as Record<string, { price: number; timestamp: number }>,
-        ).map(([symbol, priceData]) => [
-          symbol,
-          {
-            price: Number(priceData.price),
-            timestamp: priceData.timestamp,
-          },
-        ]),
-      );
-
-      setTokenData({
-        balances: data.balances,
-        prices: normalizedPrices,
-      });
-
-      // Calculate total value and update parent
-      const totalValue = data.balances.reduce(
-        (sum: number, balance: TokenData["balances"][0]) => {
-          const price = normalizedPrices[balance.token.symbol]?.price || 0;
-          return sum + balance.uiAmount * price;
-        },
-        0,
-      );
-
-      if (onUpdateValue) {
-        onUpdateValue(account.id, totalValue);
-      }
-
-      setLastFetchTime(Date.now());
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.error("Error fetching EVM balances:", new Error(message));
-      setError(message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [account.publicKey, account.id, onUpdateValue, selectedChain]);
-
-  // Initial fetch on mount and refresh every 5 minutes
-  useEffect(() => {
-    fetchBalances();
-    const intervalId = setInterval(fetchBalances, 300000);
-    return () => clearInterval(intervalId);
-  }, [fetchBalances]);
-
   // Handle expanded state changes from parent
   useEffect(() => {
     setIsOpen(isExpanded);
@@ -260,13 +334,15 @@ export function EvmCard({
 
   const filteredBalances = useMemo(() => {
     const walletHidden = hiddenTokens[account.id] || [];
-    return tokenData.balances.filter((balance) => {
-      if (!showHiddenTokens && walletHidden.includes(balance.token.symbol)) {
-        return false;
-      }
-      return true;
-    });
-  }, [tokenData.balances, hiddenTokens, account.id, showHiddenTokens]);
+    return (
+      tokenData?.balances.filter((balance) => {
+        if (!showHiddenTokens && walletHidden.includes(balance.token.symbol)) {
+          return false;
+        }
+        return true;
+      }) || []
+    );
+  }, [tokenData?.balances, hiddenTokens, account.id, showHiddenTokens]);
 
   // Find native token balance for display in title
   const nativeToken = useMemo(() => {
@@ -289,16 +365,63 @@ export function EvmCard({
     return `${account.name} (${formatLargeNumber(amount)} ${nativeToken.token.symbol})`;
   }, [account.name, nativeToken]);
 
+  // Calculate total value
+  const totalValue = useMemo(() => {
+    if (!tokenData) return 0;
+    return tokenData.totalValueUsd;
+  }, [tokenData]);
+
+  const renderTokenBalance = useCallback(
+    (balance: TokenData["balances"][0]) => {
+      const price = tokenData?.prices[balance.token.symbol];
+      const value = price ? balance.uiAmount * price.price : 0;
+      const hasValidPrice =
+        price && !price.noPriceData && Number.isFinite(value);
+
+      return (
+        <TokenBalance
+          key={`${balance.token.address}-${balance.token.symbol}`}
+          token={{
+            symbol: balance.token.symbol,
+            name: balance.token.name,
+            decimals: balance.token.decimals,
+            address: balance.token.address,
+          }}
+          quantity={balance.uiAmount}
+          price={hasValidPrice ? price.price : undefined}
+          showPrice={true}
+          canHide={!showHiddenTokens}
+          onHide={
+            showHiddenTokens
+              ? undefined
+              : () => {
+                  const currentHidden = hiddenTokens[selectedChain] || [];
+                  setHiddenTokens({
+                    ...hiddenTokens,
+                    [selectedChain]: [...currentHidden, balance.token.address],
+                  });
+                }
+          }
+          chainType={selectedChain}
+        />
+      );
+    },
+    [
+      tokenData?.prices,
+      selectedChain,
+      hiddenTokens,
+      setHiddenTokens,
+      showHiddenTokens,
+    ],
+  );
+
   return (
     <>
       <BaseCard
         account={{
           ...account,
           chain: selectedChain,
-          value: tokenData.balances.reduce((sum, balance) => {
-            const price = tokenData.prices[balance.token.symbol]?.price || 0;
-            return sum + balance.uiAmount * price;
-          }, 0),
+          value: totalValue,
           name: displayName,
         }}
         expanded={isOpen}
@@ -306,7 +429,7 @@ export function EvmCard({
         variant={compact ? "compact" : "detailed"}
         isLoading={isLoading}
         error={error}
-        lastUpdated={lastFetchTime}
+        lastUpdated={Date.now()}
       >
         {!compact && isOpen && !isLoading && !error && (
           <div className="space-y-2">
@@ -363,7 +486,7 @@ export function EvmCard({
                 const walletHidden = hiddenTokens[account.id] || [];
                 const isHidden = walletHidden.includes(balance.token.symbol);
                 const price = Number(
-                  tokenData.prices[balance.token.symbol]?.price || 0,
+                  tokenData?.prices[balance.token.symbol]?.price || 0,
                 );
 
                 if (!showHiddenTokens && isHidden) {
@@ -398,13 +521,28 @@ export function EvmCard({
             </div>
             {supportsTokensAndNfts(selectedChain) && (
               <div className="flex items-center gap-2 mt-4">
-                <button
-                  onClick={() => setShowNftModal(true)}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <ImageIcon className="h-3.5 w-3.5" />
-                  View NFTs
-                </button>
+                {isLoadingNfts ? (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    Loading NFTs...
+                  </div>
+                ) : nfts?.length > 0 ? (
+                  <button
+                    onClick={() => setShowNftModal(true)}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    View {nfts.length} NFTs on{" "}
+                    {CHAIN_CONFIG[selectedChain].name}
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    {nftError
+                      ? `Error loading NFTs: ${nftError}`
+                      : "No NFTs in this wallet"}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -416,7 +554,11 @@ export function EvmCard({
           isOpen={showNftModal}
           onClose={() => setShowNftModal(false)}
           walletAddress={account.publicKey}
-          chain={account.chain}
+          chain={selectedChain}
+          nfts={nfts}
+          isLoading={isLoadingNfts}
+          error={nftError}
+          emptyMessage="No NFTs found in this wallet"
         />
       )}
     </>

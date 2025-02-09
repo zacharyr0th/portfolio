@@ -188,7 +188,14 @@ function formatPrice(price: number): string {
   return `$${price.toFixed(2)}`;
 }
 
-function formatPercent(percent: number): string {
+function formatPercent(percent: number | undefined | null): string {
+  if (
+    percent === null ||
+    percent === undefined ||
+    isNaN(percent) ||
+    !isFinite(percent)
+  )
+    return "0.0%";
   const sign = percent >= 0 ? "+" : "";
   return `${sign}${percent.toFixed(1)}%`;
 }

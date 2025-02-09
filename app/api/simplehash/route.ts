@@ -98,8 +98,19 @@ export async function GET(req: NextRequest) {
 
     const { wallet, chain } = result.data;
     console.log("Fetching NFTs for:", { wallet, chain });
-    const nfts = await fetchWalletNFTs(wallet, chain);
-    console.log("NFTs Response:", { count: nfts.length });
+
+    // Get additional query parameters
+    const limit = searchParams.get("limit");
+    const cursor = searchParams.get("cursor");
+    const orderBy = searchParams.get("order_by");
+
+    const options: FetchWalletNFTsOptions = {
+      limit: limit ? parseInt(limit) : undefined,
+      cursor: cursor || undefined,
+      order_by: orderBy || undefined,
+    };
+
+    const nfts = await fetchWalletNFTs(wallet, chain, options);
     return createSuccessResponse(nfts);
   } catch (error) {
     console.error("SimpleHash API Error:", error);

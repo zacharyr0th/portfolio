@@ -62,6 +62,12 @@ export interface FetchWalletNFTsOptions {
   limit?: number;
 }
 
+export interface NFTResponse {
+  nfts: NFTBalance[];
+  next_cursor?: string;
+  previous_cursor?: string;
+}
+
 // Constants
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const REQUEST_TIMEOUT = 10000; // 10 seconds
@@ -80,21 +86,30 @@ const CHAIN_MAPPING = {
   aptos: "aptos",
   flow: "flow",
   flow_evm: "flow-evm",
+  sei: "sei",
 
   // EVM Layer 2s & Sidechains
   polygon: "polygon",
   arbitrum: "arbitrum",
   arbitrum_nova: "arbitrum-nova",
   avalanche: "avalanche",
+  abstract: "abstract",
+  apechain: "apechain",
+  b3: "b3",
   base: "base",
   blast: "blast",
   bsc: "bsc",
   canto: "canto",
   celo: "celo",
+  cyber: "cyber",
+  degen: "degen",
   fantom: "fantom",
+  forma: "forma",
   gnosis: "gnosis", // POAP contract only
+  godwoken: "godwoken",
   immutable_zkevm: "immutable-zkevm",
   linea: "linea",
+  loot: "loot",
   manta: "manta",
   mantle: "mantle",
   mode: "mode",
@@ -103,7 +118,15 @@ const CHAIN_MAPPING = {
   optimism: "optimism",
   palm: "palm",
   polygon_zkevm: "polygon-zkevm",
+  proof_of_play: "proof-of-play",
+  proof_of_play_boss: "proof-of-play-boss",
+  rari: "rari",
+  soneium: "soneium",
+  saakuru: "saakuru",
   scroll: "scroll",
+  shape: "shape",
+  treasure: "treasure",
+  xai: "xai",
   zksync_era: "zksync-era",
   zora: "zora",
 } as const;
@@ -187,26 +210,105 @@ function getChainIdentifier(chain: string): string {
   return mappedChain;
 }
 
+// Helper: Convert Sei address to EVM address
+async function convertSeiToEvmAddress(seiAddress: string): Promise<string> {
+  const rpcUrl = process.env.QUICKNODE_SEI_ENDPOINT;
+  if (!rpcUrl) {
+    throw new Error("QUICKNODE_SEI_ENDPOINT environment variable is not set");
+  }
+
+  try {
+    console.log("Converting Sei address:", { seiAddress });
+    const response = await fetch(rpcUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        method: "sei_getEVMAddress",
+        params: [seiAddress],
+        id: 1,
+        jsonrpc: "2.0",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("QuickNode API error:", {
+        status: response.status,
+        error: errorText,
+      });
+      throw new Error(`QuickNode API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.error) {
+      console.error("QuickNode RPC error:", data.error);
+      throw new Error(data.error.message || "Failed to convert Sei address");
+    }
+
+    if (
+      !data.result ||
+      typeof data.result !== "string" ||
+      !data.result.startsWith("0x")
+    ) {
+      console.error("Invalid EVM address returned:", data.result);
+      throw new Error("Invalid EVM address format returned from QuickNode");
+    }
+
+    console.log("Successfully converted Sei address:", {
+      from: seiAddress,
+      to: data.result,
+    });
+    return data.result;
+  } catch (error) {
+    console.error("Sei address conversion error:", error);
+    throw new Error(
+      `Failed to convert Sei address: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
+  }
+}
+
+// Helper: Validate wallet address format
+async function validateWalletAddress(
+  chain: string,
+  address: string,
+): Promise<string> {
+  if (chain.toLowerCase() === "sei") {
+    if (address.startsWith("sei1")) {
+      // Convert Sei native address to EVM address
+      return await convertSeiToEvmAddress(address);
+    }
+    if (!address.startsWith("0x")) {
+      throw new Error(
+        "Invalid EVM address format for Sei chain. Address must start with 0x",
+      );
+    }
+  }
+  return address;
+}
+
 // Update fetchWalletNFTs function
 export async function fetchWalletNFTs(
   walletAddress: string,
   chain: string,
   options: FetchWalletNFTsOptions = {},
-): Promise<NFTBalance[]> {
+): Promise<NFTResponse> {
   const chainId = getChainIdentifier(chain);
-  const cacheKey = `nfts-${chainId}-${walletAddress}-${JSON.stringify(options)}`;
+  const validatedAddress = await validateWalletAddress(chain, walletAddress);
+  const cacheKey = `nfts-${chainId}-${validatedAddress}-${JSON.stringify(options)}`;
 
   try {
     // Check cache first
     const cached = cache.get(cacheKey);
-    if (cached && Array.isArray(cached)) {
-      return cached as NFTBalance[];
+    if (cached && typeof cached === "object" && "nfts" in cached) {
+      return cached as NFTResponse;
     }
 
     // Build query parameters
     const queryParams = new URLSearchParams({
       chains: chainId,
-      wallet_addresses: walletAddress,
+      wallet_addresses: validatedAddress,
     });
 
     // Add optional parameters
@@ -245,9 +347,11 @@ export async function fetchWalletNFTs(
 
     // Fetch from API with retry
     const response = await retryOperation(() =>
-      makeRequest<{ nfts: any[] }>(
-        `${BASE_URL}/nfts/owners_v2?${queryParams.toString()}`,
-      ),
+      makeRequest<{
+        nfts: any[];
+        next_cursor?: string;
+        previous_cursor?: string;
+      }>(`${BASE_URL}/nfts/owners_v2?${queryParams.toString()}`),
     );
 
     // Transform and normalize data
@@ -279,9 +383,15 @@ export async function fetchWalletNFTs(
           : undefined,
     }));
 
+    const result: NFTResponse = {
+      nfts,
+      next_cursor: response.next_cursor,
+      previous_cursor: response.previous_cursor,
+    };
+
     // Cache the results
-    cache.set(cacheKey, nfts, CACHE_TTL);
-    return nfts;
+    cache.set(cacheKey, result, CACHE_TTL);
+    return result;
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error fetching NFTs";

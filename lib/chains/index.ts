@@ -2,7 +2,7 @@ import type { ChainHandler } from "./types";
 import { aptosHandler, clearCache as clearAptosCache } from "./aptos";
 import { solanaHandler, clearCache as clearSolanaCache } from "./solana";
 import { suiHandler, clearCache as clearSuiCache } from "./sui";
-import { evmHandler, clearCache as clearEvmCache } from "./evm+";
+import { evmHandler, clearCache as clearEvmCache } from "./evm";
 import { logger } from "@/lib/utils/core/logger";
 import { ChainType } from "./types";
 import { isValidChain } from "./config";

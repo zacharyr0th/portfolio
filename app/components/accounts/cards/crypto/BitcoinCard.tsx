@@ -60,6 +60,9 @@ export function BitcoinCard({
   const [hiddenTokens, setHiddenTokens] = useLocalStorage<
     Record<string, string[]>
   >("hidden-tokens", {});
+  const [isLoadingNfts, setIsLoadingNfts] = useState(true);
+  const [nfts, setNfts] = useState<any[]>([]);
+  const [nftError, setNftError] = useState<string | null>(null);
 
   // Handle expanded state changes
   useEffect(() => {
@@ -153,6 +156,40 @@ export function BitcoinCard({
     [account.id, setHiddenTokens],
   );
 
+  const fetchNfts = useCallback(async () => {
+    try {
+      setIsLoadingNfts(true);
+      setNftError(null);
+
+      const response = await fetch(
+        `/api/assets?address=${account.publicKey}&chain=bitcoin&include_nfts=true`,
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to fetch nfts");
+      }
+
+      const data = await response.json();
+      setNfts(data.tokens?.nfts || []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error("Error fetching Bitcoin nfts:", new Error(message));
+      setNftError(message);
+    } finally {
+      setIsLoadingNfts(false);
+    }
+  }, [account.publicKey]);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchNfts();
+      const interval = setInterval(fetchNfts, 60000);
+      return () => clearInterval(interval);
+    }
+    return undefined;
+  }, [isOpen, fetchNfts]);
+
   return (
     <>
       <BaseCard
@@ -236,13 +273,27 @@ export function BitcoinCard({
               })}
             </div>
             <div className="pt-2 border-t border-border">
-              <button
-                onClick={() => setShowNftModal(true)}
-                className="w-full flex items-center justify-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent rounded-md transition-colors"
-              >
-                <ImageIcon className="h-3.5 w-3.5" />
-                View Inscriptions
-              </button>
+              {isLoadingNfts ? (
+                <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  Loading Inscriptions...
+                </div>
+              ) : nfts?.length > 0 ? (
+                <button
+                  onClick={() => setShowNftModal(true)}
+                  className="w-full flex items-center justify-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent rounded-md transition-colors"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  View {nfts.length} Inscriptions
+                </button>
+              ) : (
+                <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  {nftError
+                    ? `Error loading inscriptions: ${nftError}`
+                    : "No inscriptions in this wallet"}
+                </div>
+              )}
             </div>
           </div>
         )}

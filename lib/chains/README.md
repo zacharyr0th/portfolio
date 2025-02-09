@@ -1,30 +1,30 @@
 # Supported Chains
 
-## Full Support (Native Assets, Fungible Assets, and NFTs)
+## Full Support - Native Assets, Fungible Assets, and NFTs
 
-| Number | Chain        | Native Assets (Source) | Fungible Assets (Source) | NFTs (Source) | Chain Type |
-| ------ | ------------ | ---------------------- | ------------------------ | ------------- | ---------- |
-| 1      | Aptos        | ✅ Panora              | ✅ Aptos Fullnode        | ✅ SimpleHash | L1         |
-| 2      | Ethereum     | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L1         |
-| 3      | Solana       | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L1         |
-| 4      | Bitcoin      | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L1         |
-| 5      | Sei          | ❌                     | ❌                       | ✅ SimpleHash | L1         |
-| 6      | Sui          | ❌                     | ❌                       | ✅ SimpleHash | L1         |
-| 7      | Flow         | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L1         |
-| 8      | Celo         | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L1         |
-| 9      | Arbitrum One | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
-| 10     | Base         | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
-| 11     | Blast        | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
-| 12     | Cyber        | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
-| 13     | Mantle       | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
-| 14     | Optimism     | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
-| 15     | Scroll       | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
-| 16     | Flow EVM     | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
-| 17     | Zora         | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | L2         |
-| 18     | Polygon      | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | Sidechain  |
-| 19     | Gnosis       | ✅ SimpleHash          | ✅ SimpleHash            | ✅ SimpleHash | Sidechain  |
+| Number | Chain        | Token Balances    | Token Prices  | NFTs          | Chain Type |
+| ------ | ------------ | ----------------- | ------------- | ------------- | ---------- |
+| 1      | Aptos        | ✅ Aptos Fullnode | ✅ Panora     | ✅ SimpleHash | L1         |
+| 2      | Bitcoin      | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L1         |
+| 3      | Celo         | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L1         |
+| 4      | Ethereum     | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L1         |
+| 5      | Flow         | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L1         |
+| 6      | Sei          | ✅ QuickNode      | ✅ CMC        | ✅ SimpleHash | L1         |
+| 8      | Sui          | ✅ Sui Fullnode   | ✅ CMC        | ✅ SimpleHash | L1         |
+| 7      | Solana       | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L1         |
+| 9      | Arbitrum One | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L2         |
+| 10     | Base         | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L2         |
+| 11     | Blast        | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L2         |
+| 12     | Cyber        | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L2         |
+| 13     | Flow EVM     | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L2         |
+| 14     | Mantle       | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L2         |
+| 15     | Optimism     | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L2         |
+| 16     | Scroll       | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L2         |
+| 17     | Zora         | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | L2         |
+| 18     | Gnosis       | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | Sidechain  |
+| 19     | Polygon      | ✅ SimpleHash     | ✅ SimpleHash | ✅ SimpleHash | Sidechain  |
 
-## Native and Fungible Assets Support (No NFTs)
+## Native and Fungible Assets Support - No NFTs
 
 | Number | Chain              | Native Assets (Source) | Fungible Assets (Source) | NFTs (Source) | Chain Type |
 | ------ | ------------------ | ---------------------- | ------------------------ | ------------- | ---------- |
@@ -34,9 +34,9 @@
 | 23     | Forma              | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
 | 24     | Proof of Play Boss | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
 | 25     | Rari               | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
-| 26     | Soneium            | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
-| 27     | Saakuru            | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
-| 28     | Shape              | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
+| 26     | Saakuru            | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
+| 27     | Shape              | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
+| 28     | Soneium            | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | L2         |
 | 29     | Palm               | ✅ SimpleHash          | ✅ SimpleHash            | ❌            | Sidechain  |
 
 ## Limited Support

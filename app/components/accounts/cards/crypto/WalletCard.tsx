@@ -13,7 +13,7 @@ import {
 import type { WalletAccount, ChainType } from "../types";
 import { logger } from "@/lib/utils/core/logger";
 import { useLocalStorage } from "@/lib/utils/hooks/useLocalStorage";
-import { EVM_CHAINS } from "@/lib/chains/evm+/types";
+import { EVM_CHAINS } from "@/lib/chains/evm/types";
 import { cn } from "@/lib/utils";
 import { formatLargeNumber } from "@/lib/utils/formatLargeNumber";
 

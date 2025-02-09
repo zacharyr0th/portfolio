@@ -122,14 +122,14 @@ function getMessageSignature(
 }
 
 // OPTIONS handler for CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   return new NextResponse(null, {
     status: 204,
     headers: corsHeaders,
   });
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<NextResponse> {
   try {
     if (isRateLimited()) {
       throw new AppError("Rate limit exceeded", "RATE_LIMIT", 429);

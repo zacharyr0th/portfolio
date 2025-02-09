@@ -5,7 +5,7 @@ const SIMPLEHASH_API_KEY = process.env.SIMPLEHASH_API_KEY;
 const SIMPLEHASH_BASE_URL = "https://api.simplehash.com/api/v0";
 const MAX_TOKENS_PER_REQUEST = 100;
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<NextResponse> {
   try {
     const { searchParams } = new URL(request.url);
     const address = searchParams.get("address");

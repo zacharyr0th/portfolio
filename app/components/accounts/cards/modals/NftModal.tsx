@@ -28,6 +28,7 @@ import {
   NFT_SUPPORTED_CHAINS,
   type ChainType,
 } from "@/lib/chains/constants";
+import { logger } from "@/lib/utils/core/logger";
 
 // Helper function to check if a chain supports both tokens and NFTs
 const supportsTokensAndNfts = (chain: ChainType): boolean => {
@@ -52,6 +53,17 @@ interface NftModalProps {
   onClose: () => void;
   walletAddress: string;
   chain: string;
+  nfts?: NFTBalance[];
+  isLoading?: boolean;
+  error?: string | null;
+  emptyMessage?: string;
+}
+
+interface ChainNftCount {
+  chain: ChainType;
+  count: number;
+  isLoading: boolean;
+  error?: string;
 }
 
 export function NftModal({
@@ -59,20 +71,25 @@ export function NftModal({
   onClose,
   walletAddress,
   chain,
+  nfts: initialNfts,
+  isLoading: initialIsLoading,
+  error: initialError,
+  emptyMessage = "No NFTs found in this wallet",
 }: NftModalProps) {
-  const [nfts, setNfts] = useState<NFTBalance[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [nfts, setNfts] = useState<NFTBalance[]>(initialNfts || []);
+  const [isLoading, setIsLoading] = useState<boolean>(initialIsLoading ?? true);
+  const [error, setError] = useState<string | null>(initialError || null);
   const [copied, setCopied] = useState(false);
   const [selectedChain, setSelectedChain] = useState<ChainType>(() => {
     const normalizedChain = chain
       .toLowerCase()
       .replace("-main", "") as ChainType;
-    // Default to ethereum if the current chain doesn't support both tokens and NFTs
     return supportsTokensAndNfts(normalizedChain)
       ? normalizedChain
       : "ethereum";
   });
+  const [chainCounts, setChainCounts] = useState<Record<string, number>>({});
+  const [isLoadingCounts, setIsLoadingCounts] = useState(false);
 
   const supportedChains = getSupportedChains();
 
@@ -82,29 +99,111 @@ export function NftModal({
     setTimeout(() => setCopied(false), 2000);
   }, [walletAddress]);
 
-  const fetchNFTs = useCallback(async () => {
-    if (
-      !walletAddress ||
-      !selectedChain ||
-      !supportsTokensAndNfts(selectedChain)
-    )
-      return;
+  // Fetch NFT counts for all supported chains when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
 
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(
-        `/api/simplehash?wallet=${encodeURIComponent(walletAddress)}&chain=${encodeURIComponent(selectedChain)}`,
-      );
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to fetch NFTs");
+    const fetchCounts = async () => {
+      setIsLoadingCounts(true);
+      const supportedChainIds = supportedChains.map((chain) => chain.id);
+      const counts: Record<string, number> = {};
+
+      try {
+        // Fetch all counts in parallel with retries
+        await Promise.all(
+          supportedChainIds.map(async (chainId) => {
+            let retries = 3;
+            while (retries > 0) {
+              try {
+                const response = await fetch(
+                  `/api/simplehash?wallet=${walletAddress}&chain=${chainId}&count=true`,
+                );
+                if (!response.ok) {
+                  throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                if (data && typeof data.total === "number") {
+                  counts[chainId] = data.total;
+                  break;
+                } else {
+                  throw new Error("Invalid response format");
+                }
+              } catch (err) {
+                retries--;
+                if (retries === 0) {
+                  console.error(
+                    `Failed to fetch count for ${chainId} after all retries:`,
+                    err,
+                  );
+                  counts[chainId] = 0;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+              }
+            }
+          }),
+        );
+
+        setChainCounts(counts);
+      } catch (err) {
+        console.error("Failed to fetch NFT counts:", err);
+      } finally {
+        setIsLoadingCounts(false);
       }
-      const data = await response.json();
-      setNfts(data);
+    };
+
+    fetchCounts();
+  }, [isOpen, walletAddress, supportedChains]);
+
+  const fetchNFTs = useCallback(async () => {
+    if (!supportsTokensAndNfts(selectedChain)) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      let allNfts: NFTBalance[] = [];
+      let hasMore = true;
+      let cursor: string | undefined;
+
+      while (hasMore) {
+        const params = new URLSearchParams({
+          wallet: walletAddress,
+          chain: selectedChain,
+          limit: "500",
+          order_by: "transfer_time__desc",
+          ...(cursor ? { cursor } : {}),
+        });
+
+        const response = await fetch(`/api/simplehash?${params}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch NFTs: HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!data || !data.nfts) {
+          throw new Error("Invalid NFT data received");
+        }
+
+        allNfts = [...allNfts, ...data.nfts];
+        cursor = data.next_cursor;
+        hasMore = Boolean(cursor);
+
+        // Add delay between paginated requests
+        if (hasMore) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+      }
+
+      setNfts(allNfts);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load NFTs");
-      setNfts([]);
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to fetch NFTs";
+      logger.error(
+        "Error fetching NFTs",
+        err instanceof Error ? err : new Error(String(err)),
+      );
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -164,7 +263,7 @@ export function NftModal({
     if (nfts.length === 0) {
       return (
         <div className="flex items-center justify-center h-48 text-muted-foreground">
-          No NFTs found in this wallet
+          {emptyMessage}
         </div>
       );
     }
@@ -189,19 +288,31 @@ export function NftModal({
             <div className="flex items-center gap-4">
               <span className="text-xl font-semibold">NFTs</span>
               <Select value={selectedChain} onValueChange={handleChainChange}>
-                <SelectTrigger className="w-[140px] h-8 text-xs">
+                <SelectTrigger className="w-[180px] h-8 text-xs">
                   <SelectValue placeholder="Select chain" />
                 </SelectTrigger>
                 <SelectContent>
-                  {supportedChains.map((chain) => (
-                    <SelectItem
-                      key={chain.id}
-                      value={chain.id}
-                      className="text-xs"
-                    >
-                      {chain.name}
-                    </SelectItem>
-                  ))}
+                  {supportedChains.map((chain) => {
+                    const count = chainCounts[chain.id];
+                    const countText = isLoadingCounts
+                      ? "(...)"
+                      : count !== undefined
+                        ? `(${count})`
+                        : "";
+
+                    return (
+                      <SelectItem
+                        key={chain.id}
+                        value={chain.id}
+                        className="text-xs flex items-center justify-between"
+                      >
+                        <span>{chain.name}</span>
+                        <span className="text-muted-foreground ml-2">
+                          {countText}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>

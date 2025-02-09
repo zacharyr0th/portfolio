@@ -6,6 +6,8 @@ import type { WalletAccount } from "../types";
 import { useLocalStorage } from "@/lib/utils/hooks/useLocalStorage";
 import { NftModal } from "../modals/NftModal";
 import { cn } from "@/lib/utils";
+import { NFTBalance } from "@/lib/data/simplehash";
+import { logger } from "@/lib/utils/core/logger";
 
 interface TokenData {
   token: {
@@ -101,6 +103,9 @@ export function SeiCard({
   const [hiddenTokens, setHiddenTokens] = useLocalStorage<
     Record<string, string[]>
   >("hidden-tokens", {});
+  const [nfts, setNfts] = useState<NFTBalance[]>([]);
+  const [isLoadingNfts, setIsLoadingNfts] = useState(true);
+  const [nftError, setNftError] = useState<string | null>(null);
 
   // Handle expanded state changes
   useEffect(() => {
@@ -134,9 +139,6 @@ export function SeiCard({
       setIsLoading(true);
       setError(null);
 
-      // Log the address being used
-      console.log("Fetching balances for address:", account.publicKey);
-
       const response = await fetch(
         `/api/sei/balance?address=${encodeURIComponent(account.publicKey)}`,
       );
@@ -147,16 +149,14 @@ export function SeiCard({
       }
 
       const data = await response.json();
-
-      // Log the response data to debug
-      console.log("Sei balance response:", data);
+      logger.debug("Sei balance response:", data);
 
       if (!data?.tokens?.balances) {
         throw new Error("Invalid response format");
       }
 
       setTokenData(data);
-      setError(null); // Clear any previous errors
+      setError(null);
 
       if (onUpdateValue) {
         onUpdateValue(account.id, data.tokens.totalValueUsd || 0);
@@ -165,18 +165,29 @@ export function SeiCard({
       setLastFetchTime(Date.now());
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error("Error fetching Sei balances:", message);
+      logger.error("Error fetching Sei balances:", new Error(message));
       setError(message);
     } finally {
       setIsLoading(false);
     }
   }, [account.publicKey, account.id, onUpdateValue]);
 
-  // Initial fetch on mount and refresh every 5 minutes
+  // Initial fetch and periodic refresh
   useEffect(() => {
-    fetchBalances();
-    const intervalId = setInterval(fetchBalances, 300000);
-    return () => clearInterval(intervalId);
+    let mounted = true;
+    const fetchData = async () => {
+      if (mounted) {
+        await fetchBalances();
+      }
+    };
+
+    fetchData();
+    const intervalId = setInterval(fetchData, REFRESH_INTERVAL);
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
   }, [fetchBalances]);
 
   const filteredBalances = useMemo(() => {
@@ -199,6 +210,72 @@ export function SeiCard({
   const displayName = seiBalance
     ? `${account.name} (${formatLargeNumber(seiBalance.uiAmount)} SEI)`
     : account.name;
+
+  const fetchNfts = useCallback(async () => {
+    try {
+      setIsLoadingNfts(true);
+      setNftError(null);
+
+      let allNfts: NFTBalance[] = [];
+      let hasMore = true;
+      let cursor: string | undefined;
+
+      // First fetch
+      const initialNftUrl = `/api/simplehash?wallet=${account.publicKey}&chain=sei&limit=500&order_by=transfer_time__desc`;
+      const initialResponse = await fetch(initialNftUrl);
+      const initialData = await initialResponse.json();
+
+      if (initialData && initialData.nfts) {
+        allNfts = [...initialData.nfts];
+        cursor = initialData.next_cursor;
+        hasMore = Boolean(cursor);
+
+        // Keep fetching while we have more pages
+        while (hasMore && cursor) {
+          const nftUrl = `/api/simplehash?wallet=${account.publicKey}&chain=sei&limit=500&cursor=${cursor}&order_by=transfer_time__desc`;
+          const nftResponse = await fetch(nftUrl);
+
+          if (!nftResponse.ok) {
+            throw new Error(
+              `Failed to fetch NFTs page: HTTP ${nftResponse.status}`,
+            );
+          }
+
+          const nftData = await nftResponse.json();
+
+          if (!nftData || !nftData.nfts) {
+            throw new Error("Invalid NFT data received");
+          }
+
+          allNfts = [...allNfts, ...nftData.nfts];
+
+          if (nftData.next_cursor) {
+            cursor = nftData.next_cursor;
+          } else {
+            hasMore = false;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+
+        setNfts(allNfts);
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to fetch NFTs";
+      logger.error(
+        "Error fetching Sei NFTs",
+        err instanceof Error ? err : new Error(String(err)),
+      );
+      setNftError(errorMessage);
+    } finally {
+      setIsLoadingNfts(false);
+    }
+  }, [account.publicKey]);
+
+  useEffect(() => {
+    fetchNfts();
+  }, [fetchNfts]);
 
   return (
     <>
@@ -272,13 +349,27 @@ export function SeiCard({
               ))}
             </div>
             <div className="flex items-center gap-2 mt-4">
-              <button
-                onClick={() => setShowNftModal(true)}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ImageIcon className="h-3.5 w-3.5" />
-                View NFTs
-              </button>
+              {isLoadingNfts ? (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  Loading NFTs...
+                </div>
+              ) : nfts?.length > 0 ? (
+                <button
+                  onClick={() => setShowNftModal(true)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  View {nfts.length} NFTs on Sei
+                </button>
+              ) : (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  {nftError
+                    ? `Error loading NFTs: ${nftError}`
+                    : "No NFTs in this wallet"}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -290,6 +381,10 @@ export function SeiCard({
           walletAddress={account.publicKey}
           chain="sei"
           onClose={() => setShowNftModal(false)}
+          nfts={nfts}
+          isLoading={isLoading}
+          error={error}
+          emptyMessage="No NFTs found in this wallet. NFTs must be on Sei's EVM chain to be displayed."
         />
       )}
     </>

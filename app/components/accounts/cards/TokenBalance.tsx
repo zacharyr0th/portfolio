@@ -14,20 +14,47 @@ const hideScrollbarClass = [
   "hover:scrollbar-none",
 ].join(" ");
 
-// Format large numbers to K/M/B format with 2 decimal places
+// Format large numbers to K/M/B format with appropriate decimal places
 function formatLargeNumber(num: number): string {
   const absNum = Math.abs(num);
-  if (absNum >= 1e9) {
-    return (num / 1e9).toFixed(2) + "B";
-  } else if (absNum >= 1e6) {
-    return (num / 1e6).toFixed(2) + "M";
-  } else if (absNum >= 1e3) {
-    return (num / 1e3).toFixed(2) + "K";
-  } else if (absNum < 0.01) {
-    return "< 0.01";
-  } else {
-    return num.toFixed(2);
+
+  // For very small numbers
+  if (absNum < 0.000001) {
+    return "< 0.000001";
   }
+  if (absNum < 0.01) {
+    return absNum.toFixed(6);
+  }
+
+  // For numbers less than 1000, use standard formatting
+  if (absNum < 1000) {
+    return absNum.toFixed(Math.min(2, countDecimals(absNum)));
+  }
+
+  // For larger numbers, use appropriate suffixes
+  const divisions = [
+    { value: 1e9, symbol: "B" },
+    { value: 1e6, symbol: "M" },
+    { value: 1e3, symbol: "K" },
+  ];
+
+  for (const { value, symbol } of divisions) {
+    if (absNum >= value) {
+      const divided = num / value;
+      // Use more decimals for smaller numbers
+      const decimals = divided < 10 ? 2 : divided < 100 ? 1 : 0;
+      return divided.toFixed(decimals) + symbol;
+    }
+  }
+
+  return num.toFixed(2);
+}
+
+// Helper to count meaningful decimal places
+function countDecimals(num: number): number {
+  const text = num.toString();
+  const index = text.indexOf(".");
+  return index === -1 ? 0 : text.length - index - 1;
 }
 
 // Smart decimal precision based on token and value
@@ -106,6 +133,9 @@ const getFormatter = (min: number, max: number): Intl.NumberFormat => {
 
 // Helper functions moved to the top level
 const getDisplaySymbol = (symbol: string, address?: string): string => {
+  // Handle null/undefined symbol
+  if (!symbol) return "";
+
   // Blacklisted tokens - return empty string to hide them
   if (
     address ===
@@ -268,12 +298,12 @@ function TokenBalanceComponent({
   const { min, max } = useMemo(
     () =>
       getDecimalPrecision(
-        token.symbol.toUpperCase(),
+        token?.symbol?.toUpperCase() ?? "UNKNOWN",
         quantity,
         value,
         chainType,
       ),
-    [token.symbol, quantity, value, chainType],
+    [token?.symbol, quantity, value, chainType],
   );
 
   const computedQuantity = useMemo(() => {

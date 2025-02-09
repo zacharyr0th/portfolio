@@ -97,14 +97,14 @@ const corsHeaders = {
 };
 
 // OPTIONS handler for CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   return new NextResponse(null, {
     status: 204,
     headers: corsHeaders,
   });
 }
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<NextResponse> {
   try {
     const requestId = SecurityUtils.generateNonce();
     const searchParams = new URL(request.url).searchParams;

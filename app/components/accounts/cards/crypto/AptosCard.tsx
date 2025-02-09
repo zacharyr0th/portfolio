@@ -7,6 +7,7 @@ import { useLocalStorage } from "@/lib/utils/hooks/useLocalStorage";
 import { logger } from "@/lib/utils/core/logger";
 import { NftModal } from "../modals/NftModal";
 import { cn } from "@/lib/utils";
+import type { NFTBalance } from "@/lib/data/simplehash";
 
 interface TokenData {
   token: {
@@ -75,7 +76,9 @@ export function AptosCard({
   const [isOpen, setIsOpen] = useState(isExpanded);
   const [showNftModal, setShowNftModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingNfts, setIsLoadingNfts] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [nftError, setNftError] = useState<string | null>(null);
   const [tokenData, setTokenData] = useState<ApiResponse["tokens"]>({
     balances: [],
     prices: {},
@@ -85,6 +88,7 @@ export function AptosCard({
   const [hiddenTokens, setHiddenTokens] = useLocalStorage<
     Record<string, string[]>
   >("hidden-tokens", {});
+  const [nfts, setNfts] = useState<NFTBalance[]>([]);
 
   // Handle expanded state changes
   useEffect(() => {
@@ -102,17 +106,19 @@ export function AptosCard({
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/aptos?address=${account.publicKey}`);
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+      // Fetch balance data
+      const balanceResponse = await fetch(
+        `/api/aptos?address=${account.publicKey}`,
+      );
+      if (!balanceResponse.ok) {
+        throw new Error(`API error: ${balanceResponse.status}`);
       }
-
-      const data: ApiResponse = await response.json();
-      setTokenData(data.tokens);
+      const balanceData = await balanceResponse.json();
+      setTokenData(balanceData.tokens);
 
       // Update total value
       if (onUpdateValue) {
-        onUpdateValue(account.id, data.tokens.totalValueUsd);
+        onUpdateValue(account.id, balanceData.tokens.totalValueUsd);
       }
 
       setLastFetchTime(Date.now());
@@ -126,12 +132,80 @@ export function AptosCard({
     }
   }, [account.publicKey, account.id, onUpdateValue]);
 
-  // Initial fetch on mount and refresh every 5 minutes
+  const fetchNfts = useCallback(async () => {
+    try {
+      setIsLoadingNfts(true);
+      setNftError(null);
+
+      let allNfts: NFTBalance[] = [];
+      let hasMore = true;
+      let cursor: string | undefined;
+
+      const headers = {
+        "X-API-KEY": process.env.SIMPLEHASH_API_KEY || "",
+        accept: "application/json",
+      };
+
+      // First fetch
+      const initialNftUrl = `/api/simplehash?wallet=${account.publicKey}&chain=aptos&limit=500&order_by=transfer_time__desc`;
+      const initialResponse = await fetch(initialNftUrl, { headers });
+      const initialData = await initialResponse.json();
+
+      if (initialData && initialData.nfts) {
+        allNfts = [...initialData.nfts];
+        cursor = initialData.next_cursor;
+        hasMore = Boolean(cursor);
+
+        // Keep fetching while we have more pages
+        while (hasMore && cursor) {
+          const nftUrl = `/api/simplehash?wallet=${account.publicKey}&chain=aptos&limit=500&cursor=${cursor}&order_by=transfer_time__desc`;
+          const nftResponse = await fetch(nftUrl, { headers });
+
+          if (!nftResponse.ok) {
+            throw new Error(
+              `Failed to fetch NFTs page: HTTP ${nftResponse.status}`,
+            );
+          }
+
+          const nftData = await nftResponse.json();
+
+          if (!nftData || !nftData.nfts) {
+            throw new Error("Invalid NFT data received");
+          }
+
+          allNfts = [...allNfts, ...nftData.nfts];
+
+          if (nftData.next_cursor) {
+            cursor = nftData.next_cursor;
+          } else {
+            hasMore = false;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+
+        setNfts(allNfts);
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to fetch NFTs";
+      logger.error("Error fetching Aptos NFTs:", new Error(message));
+      setNftError(message);
+    } finally {
+      setIsLoadingNfts(false);
+    }
+  }, [account.publicKey]);
+
+  // Separate effects for balance and NFT data
   useEffect(() => {
     fetchData();
     const intervalId = setInterval(fetchData, 300000);
     return () => clearInterval(intervalId);
   }, [fetchData]);
+
+  useEffect(() => {
+    fetchNfts();
+  }, [fetchNfts]);
 
   const filteredBalances = useMemo(() => {
     const walletHidden = hiddenTokens[account.id] || [];
@@ -246,13 +320,27 @@ export function AptosCard({
               })}
             </div>
             <div className="flex items-center gap-2 mt-4">
-              <button
-                onClick={() => setShowNftModal(true)}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ImageIcon className="h-3.5 w-3.5" />
-                View NFTs
-              </button>
+              {isLoadingNfts ? (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  Loading NFTs...
+                </div>
+              ) : nfts?.length > 0 ? (
+                <button
+                  onClick={() => setShowNftModal(true)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  View {nfts.length} NFTs on Aptos
+                </button>
+              ) : (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  {nftError
+                    ? `Error loading NFTs: ${nftError}`
+                    : "No NFTs in this wallet"}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -263,6 +351,10 @@ export function AptosCard({
           walletAddress={account.publicKey}
           chain="aptos"
           onClose={() => setShowNftModal(false)}
+          nfts={nfts}
+          isLoading={isLoadingNfts}
+          error={nftError}
+          emptyMessage="No NFTs found in this wallet"
         />
       )}
     </>

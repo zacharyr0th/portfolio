@@ -114,7 +114,7 @@ function getMessageSignature(
 }
 
 // OPTIONS handler for CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   return new NextResponse(null, {
     status: 204,
     headers: corsHeaders,
@@ -136,7 +136,7 @@ class GeminiApiError extends Error {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<NextResponse> {
   const requestId = crypto.randomBytes(32).toString("base64");
   let body: any;
 

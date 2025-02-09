@@ -1,6 +1,6 @@
 import type { WalletAccount } from "./cards/types";
 import { logger } from "@/lib/utils/core/logger";
-import { EVM_CHAINS } from "@/lib/chains/evm+/types";
+import { EVM_CHAINS } from "@/lib/chains/evm/types";
 
 // Helper to create wallet config with improved type safety
 const createWalletConfig = (

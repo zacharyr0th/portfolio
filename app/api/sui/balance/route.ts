@@ -1,23 +1,22 @@
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/utils/core/logger";
 import axios from "axios";
+import { createCache } from "@/lib/utils/core/performance";
 
 // Token mapping for known Sui tokens
 interface TokenInfo {
   symbol: string;
   name: string;
   decimals: number;
+  cmcSymbol?: string; // Added for CMC mapping
 }
 
-const TOKEN_MAPPING: Record<string, TokenInfo> = {
-  "0x2::sui::SUI": { symbol: "SUI", name: "Sui", decimals: 9 },
-  "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC":
-    {
-      symbol: "USDC",
-      name: "USD Coin",
-      decimals: 6,
-    },
-};
+// Create a price cache with 30-minute TTL
+const priceCache = createCache({
+  maxSize: 10 * 1024 * 1024, // 10MB
+  maxItems: 1000,
+  namespace: "cmc-prices-30min",
+});
 
 // Security headers
 const SECURITY_HEADERS = {
@@ -46,12 +45,15 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 // CORS preflight handler
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   return new NextResponse(null, { status: 204, headers: SECURITY_HEADERS });
 }
 
 // Error response helper
-const createErrorResponse = (message: string, status: number = 400) => {
+const createErrorResponse = (
+  message: string,
+  status: number = 400,
+): NextResponse => {
   return NextResponse.json(
     { error: message },
     { status, headers: SECURITY_HEADERS },
@@ -59,12 +61,144 @@ const createErrorResponse = (message: string, status: number = 400) => {
 };
 
 // Success response helper
-const createSuccessResponse = (data: unknown) => {
+const createSuccessResponse = (data: unknown): NextResponse => {
   return NextResponse.json(data, { headers: SECURITY_HEADERS });
 };
 
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 5000; // 5 seconds between retries
+
+// Helper for delayed retry
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Known token mappings for CMC compatibility
+const CMC_SYMBOL_MAPPING: Record<string, string> = {
+  SUI: "SUI",
+  USDC: "USDC",
+  USDT: "USDT",
+  WETH: "ETH",
+  WBTC: "BTC",
+};
+
+// Helper to parse token info from coin type
+function parseTokenInfo(coinType: string): TokenInfo {
+  const parts = coinType.split("::");
+  const lastPart = parts[parts.length - 1] || "UNKNOWN";
+  const symbol = lastPart.toUpperCase();
+
+  return {
+    symbol,
+    name: lastPart,
+    decimals: coinType === "0x2::sui::SUI" ? 9 : 6,
+    cmcSymbol: CMC_SYMBOL_MAPPING[symbol] || symbol,
+  };
+}
+
+// Helper to store cache with TTL
+function setCacheWithTTL(key: string, value: number) {
+  priceCache.set(key, value);
+  // Cache for 30 minutes
+  setTimeout(() => priceCache.set(key, undefined), 30 * 60 * 1000);
+}
+
+// Helper to fetch prices from CMC with retry logic
+async function fetchCMCPrices(
+  symbols: string[],
+): Promise<Record<string, number>> {
+  const prices: Record<string, number> = {};
+  const uniqueSymbols = [...new Set(symbols)];
+
+  // Check cache first
+  const cachedPrices = uniqueSymbols.reduce(
+    (acc, symbol) => {
+      const cached = priceCache.get(symbol);
+      if (typeof cached === "number") {
+        acc[symbol] = cached;
+        logger.info(`Using cached price for ${symbol}:`, { price: cached });
+      }
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  // Filter out symbols we already have cached
+  const symbolsToFetch = uniqueSymbols.filter((s) => !cachedPrices[s]);
+
+  if (symbolsToFetch.length === 0) {
+    return cachedPrices;
+  }
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const cmcResponse = await axios.get(
+        "https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest",
+        {
+          headers: {
+            "X-CMC_PRO_API_KEY": process.env.CMC_API_KEY,
+            Accept: "application/json",
+          },
+          params: {
+            symbol: symbolsToFetch.join(","),
+            convert: "USD",
+            skip_invalid: true,
+          },
+        },
+      );
+
+      if (cmcResponse.data?.data) {
+        Object.entries(cmcResponse.data.data).forEach(
+          ([symbol, data]: [string, any]) => {
+            if (data?.[0]?.quote?.USD?.price) {
+              const price = data[0].quote.USD.price;
+              prices[symbol] = price;
+              setCacheWithTTL(symbol, price);
+              logger.info(`Got price for ${symbol}:`, { price });
+            }
+          },
+        );
+        break; // Success, exit retry loop
+      }
+    } catch (error) {
+      const isLastAttempt = attempt === MAX_RETRIES;
+      logger.warn(`CMC API attempt ${attempt} failed:`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      if (!isLastAttempt) {
+        await sleep(RETRY_DELAY * attempt);
+        continue;
+      }
+
+      logger.error("All CMC API attempts failed");
+    }
+  }
+
+  return { ...cachedPrices, ...prices };
+}
+
+interface TokenBalance {
+  coinType: string;
+  totalBalance: string;
+}
+
+interface SuiRpcResponse {
+  jsonrpc: string;
+  result: TokenBalance[];
+  id: number;
+}
+
+interface AxiosTokenResponse {
+  data: SuiRpcResponse;
+}
+
+interface ExtendedError extends Error {
+  response?: unknown;
+  details?: unknown;
+}
+
 // GET handler for Sui balance requests
-export async function GET(req: Request) {
+export async function GET(req: Request): Promise<NextResponse> {
   try {
     const { searchParams } = new URL(req.url);
     const address = searchParams.get("address");
@@ -73,152 +207,143 @@ export async function GET(req: Request) {
       return createErrorResponse("Missing required parameter: address");
     }
 
-    // Get the Sui RPC endpoint from environment variables
     const suiRpcUrl = process.env.SUI_RPC_URL;
     if (!suiRpcUrl) {
       return createErrorResponse("Sui RPC endpoint not configured");
     }
 
-    // Log the request
-    logger.info("Fetching Sui balances", { address, rpcUrl: suiRpcUrl });
-
-    // Fetch balances using Sui RPC API
-    const response = await axios.post(
-      suiRpcUrl,
-      {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "suix_getAllBalances",
-        params: [address],
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
-
-    // Log the raw response for debugging
-    logger.debug("Sui RPC response", {
-      status: response.status,
-      data: response.data,
+    logger.info("Starting Sui balance fetch", {
+      address,
+      rpcUrl: suiRpcUrl,
     });
 
-    if (!response.data?.result) {
-      return createErrorResponse("Failed to fetch balances");
-    }
-
-    // Get unique tokens from balances
-    const uniqueTokens = response.data.result
-      .map((balance: any) => {
-        const mapping = TOKEN_MAPPING[balance.coinType];
-        return mapping?.symbol || null;
-      })
-      .filter(Boolean);
-
-    // Log unique tokens we're fetching prices for
-    logger.info("Fetching prices for tokens:", { uniqueTokens });
-
-    // Fetch prices from CMC for all supported tokens
-    const prices: Record<string, number> = {};
-    if (uniqueTokens.length > 0) {
+    // Fetch balances with retry logic
+    let balanceResponse: AxiosTokenResponse | undefined;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        logger.info("Making CMC API request", {
-          symbols: uniqueTokens.join(","),
-          apiKey: process.env.CMC_API_KEY ? "configured" : "missing",
-        });
+        logger.info(`Attempt ${attempt} to fetch Sui balances`);
 
-        const cmcResponse = await axios.get(
-          "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest",
+        const response = await axios.post<SuiRpcResponse>(
+          suiRpcUrl,
+          {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "suix_getAllBalances",
+            params: [address],
+          },
           {
             headers: {
-              "X-CMC_PRO_API_KEY": process.env.CMC_API_KEY,
+              "Content-Type": "application/json",
               Accept: "application/json",
             },
-            params: {
-              symbol: uniqueTokens.join(","),
-              convert: "USD",
-              skip_invalid: true,
-            },
+            timeout: 10000,
           },
         );
 
-        logger.debug("CMC API response:", {
-          status: cmcResponse.status,
-          statusText: cmcResponse.statusText,
-          data: cmcResponse.data,
+        logger.debug("Sui RPC raw response:", {
+          status: response.status,
+          data: response.data,
         });
 
-        // Extract prices for each token
-        if (cmcResponse.data?.data) {
-          Object.entries(cmcResponse.data.data).forEach(
-            ([symbol, data]: [string, any]) => {
-              const price = data?.quote?.USD?.price;
-              if (typeof price === "number" && !isNaN(price)) {
-                prices[symbol] = price;
-                logger.info(`Got price for ${symbol}:`, { price });
-              } else {
-                logger.warn(`Invalid price data for ${symbol}`, { data });
-              }
-            },
-          );
+        // Validate response structure
+        if (!response.data?.result) {
+          throw new Error("Invalid response structure from Sui RPC");
         }
 
-        // Log final prices object
-        logger.info("Final prices:", { prices });
+        balanceResponse = response;
+        break;
       } catch (error) {
-        if (error instanceof Error) {
-          logger.error("Failed to fetch token prices from CMC:", {
-            message: error.message,
-            stack: error.stack,
-            response: axios.isAxiosError(error)
-              ? error.response?.data
-              : undefined,
-          });
-        } else {
-          logger.error("Failed to fetch token prices from CMC:", {
-            error: String(error),
-          });
+        const isLastAttempt = attempt === MAX_RETRIES;
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        const errorResponse = axios.isAxiosError(error)
+          ? error.response?.data
+          : undefined;
+
+        logger.warn(`Sui RPC attempt ${attempt} failed:`, {
+          error: errorMessage,
+          response: errorResponse,
+          status: axios.isAxiosError(error)
+            ? error.response?.status
+            : undefined,
+        });
+
+        if (!isLastAttempt) {
+          await sleep(RETRY_DELAY * attempt);
+          continue;
         }
+        throw error;
       }
-    } else {
-      logger.warn("No supported tokens found to fetch prices for");
     }
 
-    // Transform the response to match the expected format
-    const balances = response.data.result
-      .map((balance: any) => {
-        const mapping = TOKEN_MAPPING[balance.coinType];
-        const decimals = mapping?.decimals || 9;
-        const uiAmount =
-          parseFloat(balance.totalBalance) / Math.pow(10, decimals);
-        const symbol =
-          mapping?.symbol || balance.coinType.split("::").pop() || "Unknown";
+    if (!balanceResponse?.data?.result) {
+      logger.error("Invalid response structure from Sui RPC");
+      logger.debug("Response data:", {
+        data: JSON.stringify(balanceResponse?.data),
+      });
+      return createErrorResponse(
+        "Failed to fetch balances: Invalid response structure",
+      );
+    }
 
-        const tokenPrice = prices[symbol] || 0;
-        logger.debug(`Processing balance for ${symbol}:`, {
+    // Process balances and get unique tokens
+    const tokenInfos = balanceResponse.data.result.map(
+      (balance: TokenBalance) => {
+        const info = parseTokenInfo(balance.coinType);
+        logger.debug("Parsed token info:", {
+          coinType: balance.coinType,
+          info,
+        });
+        return info;
+      },
+    );
+
+    // Fetch prices using CMC symbols
+    const prices = await fetchCMCPrices(
+      tokenInfos.map((info: TokenInfo) => info.cmcSymbol || info.symbol),
+    );
+
+    logger.debug("Fetched prices:", { prices });
+
+    // Transform balances with price data
+    const balances = balanceResponse.data.result
+      .map((balance: TokenBalance, index: number) => {
+        const tokenInfo = tokenInfos[index];
+        if (!tokenInfo) {
+          logger.warn(`Missing token info for balance at index ${index}`);
+          return null;
+        }
+
+        const uiAmount =
+          parseFloat(balance.totalBalance) / Math.pow(10, tokenInfo.decimals);
+        const price = prices[tokenInfo.cmcSymbol || tokenInfo.symbol] || 0;
+
+        logger.debug(`Processing balance for ${tokenInfo.symbol}:`, {
+          coinType: balance.coinType,
+          totalBalance: balance.totalBalance,
           uiAmount,
-          price: tokenPrice,
-          valueUsd: uiAmount * tokenPrice,
+          price,
+          valueUsd: uiAmount * price,
         });
 
         return {
           token: {
-            symbol,
-            name: mapping?.name || balance.coinType,
-            decimals,
+            symbol: tokenInfo.symbol,
+            name: tokenInfo.name,
+            decimals: tokenInfo.decimals,
             tokenAddress: balance.coinType,
-            chainId: 1, // Sui mainnet
+            chainId: 1,
             isNative: balance.coinType === "0x2::sui::SUI",
           },
           balance: balance.totalBalance,
           uiAmount,
-          valueUsd: tokenPrice ? uiAmount * tokenPrice : 0,
+          valueUsd: price * uiAmount,
         };
       })
-      // Filter out zero balances
-      .filter((balance) => balance.uiAmount > 0)
-      // Sort by value, with native SUI first
+      .filter(
+        (balance): balance is NonNullable<typeof balance> =>
+          balance !== null && balance.uiAmount > 0,
+      )
       .sort((a, b) => {
         if (a.token.isNative) return -1;
         if (b.token.isNative) return 1;
@@ -238,18 +363,33 @@ export async function GET(req: Request) {
           }),
           {},
         ),
-        totalValueUsd: balances.reduce(
-          (sum: number, b: { valueUsd: number }) => sum + b.valueUsd,
-          0,
-        ),
+        totalValueUsd: balances.reduce((sum, b) => sum + b.valueUsd, 0),
       },
     };
 
+    logger.info("Successfully processed Sui balances", {
+      address,
+      tokenCount: balances.length,
+      totalValue: transformedData.tokens.totalValueUsd,
+    });
+
     return createSuccessResponse(transformedData);
   } catch (error) {
-    const err =
-      error instanceof Error ? error : new Error("Internal server error");
-    logger.error("Sui balance API error:", err);
-    return createErrorResponse(err.message, error instanceof Error ? 400 : 500);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    if (axios.isAxiosError(error) && error.response) {
+      const { status, data } = error.response;
+      const { url, method } = error.config || {};
+      logger.error(`Sui balance API error (network): ${errorMessage}`);
+      logger.debug("Network error details", { status, url, method });
+      if (data) logger.debug("Response data:", data);
+    } else {
+      logger.error(`Sui balance API error: ${errorMessage}`);
+    }
+
+    return createErrorResponse(
+      `Failed to fetch balances: ${errorMessage}`,
+      error instanceof Error ? 400 : 500,
+    );
   }
 }
