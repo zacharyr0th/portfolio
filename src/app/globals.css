@@ -1,0 +1,202 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Base colors */
+  --background: 10, 12, 16; /* Deeper, richer dark background */
+  --foreground: 248, 250, 252; /* Softer white for better eye comfort */
+  
+  /* UI Elements */
+  --card-background: 22, 24, 29; /* Slightly warmer dark card */
+  --border-color: 38, 41, 47; /* More visible border */
+  --hover-color: 45, 48, 56; /* Warmer hover state */
+  
+  /* Text colors */
+  --text-primary: var(--foreground);
+  --text-secondary: 176, 180, 189; /* Warmer secondary text */
+  --text-muted: 130, 135, 145; /* Higher contrast muted text */
+  
+  /* Status colors */
+  --success: 52, 211, 153; /* Softer, more pleasant green */
+  --error: 248, 113, 113; /* Warmer, less harsh red */
+
+  /* Chart specific */
+  --chart-height-mobile: 300px;
+  --chart-height-desktop: 350px;
+  --stats-card-height: 90px;
+  --chart-font-size-small: 11px;
+  --chart-font-size-medium: 14px;
+  --chart-border-radius: 0.75rem;
+  --chart-padding: 1rem;
+  --chart-line-tension: 0.4;
+  --chart-border-width: 2px;
+  --chart-tooltip-padding: 12px;
+  --chart-legend-padding: 15px;
+}
+
+
+.light {
+  /* Base colors */
+  --background: 250, 247, 244; /* Warmer, creamier background */
+  --foreground: 51, 51, 51; /* Softer black for better contrast */
+  
+  /* UI Elements */
+  --card-background: 255, 255, 255;
+  --border-color: 230, 225, 215; /* Warmer, more visible border */
+  --hover-color: 246, 242, 238; /* Subtle hover state */
+  
+  /* Text colors */
+  --text-primary: var(--foreground);
+  --text-secondary: 107, 114, 128; /* More balanced secondary */
+  --text-muted: 156, 163, 175; /* Higher contrast muted */
+}
+
+.cold {
+  /* Base colors */
+  --background: 8, 27, 51; /* Richer navy background */
+  --foreground: 226, 232, 240; /* Softer blue-tinted white */
+  
+  /* UI Elements */
+  --card-background: 17, 38, 73; /* Deeper blue cards */
+  --border-color: 51, 65, 85; /* More visible borders */
+  --hover-color: 30, 58, 138; /* Rich blue hover */
+  
+  /* Text colors */
+  --text-primary: var(--foreground);
+  --text-secondary: 186, 200, 224; /* Softer secondary */
+  --text-muted: 148, 163, 184; /* Balanced muted */
+  
+  /* Status colors */
+  --success: 56, 189, 248; /* Vibrant cyan */
+  --error: 244, 63, 94; /* Warmer red */
+}
+
+.impressionist {
+  /* Monet's Garden-inspired palette */
+  --background: 242, 235, 246; /* Soft lavender mist background */
+  --foreground: 89, 69, 69; /* Deep rose brown text */
+  --card-background: 255, 247, 250; /* Pale rose card background */
+  --border-color: 216, 180, 195; /* Dusty rose border */
+  --hover-color: 237, 220, 235; /* Soft pink hover */
+  --text-primary: var(--foreground);
+  --text-secondary: 147, 105, 118; /* Muted rose */
+  --text-muted: 173, 144, 165; /* Faded lilac */
+  --success: 142, 166, 123; /* Soft sage green */
+  --error: 196, 124, 124; /* Muted rose red */
+}
+
+.chrome-bubblegum {
+  /* Cyberpunk-inspired */
+  --background: 28, 25, 38; /* Deep purple base */
+  --foreground: 255, 128, 222; /* Electric pink */
+  --card-background: 38, 34, 51; /* Rich purple cards */
+  --border-color: 86, 39, 127; /* Neon purple borders */
+  --hover-color: 58, 44, 89; /* Deep purple hover */
+  --text-primary: var(--foreground);
+  --text-secondary: 237, 184, 255; /* Soft purple */
+  --text-muted: 183, 148, 244; /* Muted purple */
+  --success: 77, 255, 225; /* Cyan */
+  --error: 255, 85, 162; /* Hot pink */
+}
+
+/* Hide scrollbars but keep functionality */
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  -webkit-overflow-scrolling: touch;
+  background-color: var(--background);
+  color: var(--text-primary);
+}
+
+/* Add base utility classes for commonly used styles */
+@layer utilities {
+  .text-primary {
+    color: rgb(var(--text-primary));
+  }
+  .text-secondary {
+    color: rgb(var(--text-secondary));
+  }
+  .text-muted {
+    color: rgb(var(--text-muted));
+  }
+  .text-success {
+    color: rgb(var(--success));
+  }
+  .text-error {
+    color: rgb(var(--error));
+  }
+  .bg-card {
+    background-color: rgb(var(--card-background));
+  }
+  .border-custom {
+    border-color: rgb(var(--border-color));
+  }
+  .hover-bg {
+    background-color: rgb(var(--hover-color));
+  }
+}
+
+/* Component styles */
+@layer components {
+  .chart-container {
+    @apply p-6 rounded-xl border border-custom bg-card flex flex-col;
+  }
+
+  .chart-wrapper {
+    @apply flex-1 flex items-center justify-center;
+    height: var(--chart-height-mobile);
+    min-height: var(--chart-height-mobile);
+  }
+
+  .stats-container {
+    @apply px-8 flex items-center gap-8 rounded-xl border border-custom bg-card;
+    height: var(--stats-card-height);
+  }
+
+  .stats-group {
+    @apply flex flex-col items-start;
+  }
+
+  .stats-group .stats-label {
+    @apply text-sm text-secondary mb-1;
+  }
+
+  .stats-group .total-value {
+    @apply text-xl font-medium text-primary leading-none;
+  }
+
+  .allocation-row {
+    @apply flex items-center gap-6 ml-auto;
+  }
+
+  .allocation-item {
+    @apply flex flex-col items-start;
+  }
+
+  .allocation-value {
+    @apply text-lg font-medium text-primary leading-none;
+  }
+
+  .allocation-label {
+    @apply text-sm text-secondary mt-1;
+  }
+
+  @screen sm {
+    .chart-wrapper {
+      height: var(--chart-height-desktop);
+      min-height: var(--chart-height-desktop);
+    }
+  }
+}
